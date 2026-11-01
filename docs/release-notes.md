@@ -1,4 +1,6 @@
-v1.8.0 新增 Chrome 帳號翻譯版，同時保留 Firefox 版。Chrome 與 Firefox 共用繁體中文介面、懸浮球、Codex／Gemini CLI／Claude Code 模型選擇、手動偵測與連結，以及 YouTube AI CC 字幕載入提示。
+v1.8.1 新增 Chrome 帳號翻譯版，同時保留 Firefox 版。Chrome 與 Firefox 共用繁體中文介面、懸浮球、Codex／Gemini CLI／Claude Code 模型選擇、手動偵測與連結，以及 YouTube AI CC 字幕載入提示。
+
+修正 Windows UTF-8 終端環境可能造成橋接封包無效、連線失敗的問題；一般與隱藏啟動方式都已納入驗證。發布前也會先通過 Windows 安裝測試。
 
 Chrome 下載 `chrome.zip` 與 `windows-bridge.zip`，分別解壓縮；在 `chrome://extensions` 開啟開發人員模式，選「載入未封裝項目」，再於橋接資料夾執行 `install.ps1 -Browser Chrome`。尚未發布 Chrome 線上應用程式商店。完整操作見 [Chrome 安裝說明](https://github.com/kiwimana/wupage-codex-translator#chrome-安裝windows)。
 

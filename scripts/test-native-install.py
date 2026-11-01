@@ -41,7 +41,8 @@ with tempfile.TemporaryDirectory(prefix='wupage-public-install-') as temporary:
         # Exercise Chrome's exact origin + parent-window argument through the
         # compiled launcher. Detection uses fake program paths, never AI login.
         for browser_args in [[origin, '--parent-window=0'], ['codex-translator@wupage.local']]:
-            process = subprocess.Popen([manifest['path'], *browser_args], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            process = subprocess.Popen([manifest['path'], *browser_args], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                creationflags=subprocess.CREATE_NO_WINDOW if name == 'install-b' else 0)
             try:
                 payload = json.dumps({'type': 'detect', 'engine': 'codex'}).encode('utf-8')
                 process.stdin.write(struct.pack('<I', len(payload)) + payload); process.stdin.flush()

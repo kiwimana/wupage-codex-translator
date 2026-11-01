@@ -4,6 +4,7 @@ using System.IO;
 using System.Web.Script.Serialization;
 using System.Collections.Generic;
 using System.Threading;
+using System.Text;
 
 class Launcher {
   static string Quote(string s) {
@@ -12,6 +13,9 @@ class Launcher {
   }
   static int Main(string[] args) {
     try {
+      // Process.StandardInput uses Console.InputEncoding. UTF-8 with a BOM
+      // corrupts the native protocol's four-byte length header on first flush.
+      Console.InputEncoding = new UTF8Encoding(false);
       string directory = AppDomain.CurrentDomain.BaseDirectory;
       var config = new JavaScriptSerializer().Deserialize<Dictionary<string,string>>(
         File.ReadAllText(Path.Combine(directory, "bridge.config.json")));
