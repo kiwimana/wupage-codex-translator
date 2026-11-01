@@ -22,6 +22,7 @@ import { normalizeAppearance } from "../shared/appearance";
 import { applyPopupMenuLayout } from "../shared/popup-menu";
 import { paragraphClickHint } from "../shared/local-shortcuts";
 import { CHATGPT_BUILD } from "../shared/chatgpt-build";
+import { DESKTOP_ACCOUNTS, desktopEngine } from "../shared/desktop-account";
 
 renderUiIcons();
 document.querySelector<HTMLElement>(".session-note")?.toggleAttribute("hidden", !CHATGPT_BUILD);
@@ -29,6 +30,7 @@ document.querySelector<HTMLElement>(".session-note")?.toggleAttribute("hidden", 
 const targetLang = query<HTMLSelectElement>("#targetLang");
 const sourceLang = query<HTMLSelectElement>("#sourceLang");
 const provider = query<HTMLSelectElement>("#provider");
+const desktopModel = query<HTMLSelectElement>("#desktopModel");
 const translationDisplayMode = query<HTMLSelectElement>("#translationDisplayMode");
 const status = query<HTMLParagraphElement>("#status");
 const pageToggleButton = query<HTMLButtonElement>("#pageToggle");
@@ -122,6 +124,13 @@ async function init(): Promise<void> {
     .join("");
   provider.value = settings.activeProviderId;
   enhanceProviderSelect(provider, settings.providers);
+  renderDesktopModel();
+  desktopModel.addEventListener("change", () => {
+    const id = settings.activeProviderId, model = desktopModel.value;
+    void updatePopupSettings(latest => ({ providers: latest.providers.map(entry => entry.id === id && entry.type === "chatgpt-desktop" ? { ...entry, model } : entry) }))
+      .catch(error => setStatus(error instanceof Error ? error.message : String(error)));
+  });
+  query<HTMLButtonElement>("#desktopAccountSettings").addEventListener("click", () => chrome.runtime.openOptionsPage());
   syncDoubaoTargetControls(settings, targetLang);
   updateLocalNotice();
   translationDisplayMode.innerHTML = TRANSLATION_DISPLAY_MODES
@@ -260,6 +269,7 @@ function settingsChanged(changes: Record<string, chrome.storage.StorageChange>, 
 
 function applyPopupSettings(incoming: ExtensionSettings): void {
   settings = incoming;
+  renderDesktopModel();
   refreshMenuLayout();
   if (sourceLang.value !== settings.sourceLang) renderLanguageOptions(sourceLang, settings.sourceLang, SOURCE_LANGUAGES);
   if (targetLang.value !== settings.targetLang) renderLanguageOptions(targetLang, settings.targetLang, TARGET_LANGUAGES);
@@ -414,6 +424,17 @@ async function togglePageTranslation(): Promise<void> {
   } finally {
     if (version === pageActionVersion) setPageToggleBusy(false);
   }
+}
+
+function renderDesktopModel(): void {
+  const config = settings.providers.find(entry => entry.id === settings.activeProviderId);
+  const field = query<HTMLElement>("#desktopModelField");
+  field.hidden = !CHATGPT_BUILD || config?.type !== "chatgpt-desktop";
+  if (field.hidden || config?.type !== "chatgpt-desktop") return;
+  const model = config.model || "";
+  const models = [...new Set(["", ...DESKTOP_ACCOUNTS[desktopEngine(config)].models, ...(config.customModels ?? []), model])];
+  desktopModel.replaceChildren(...models.map(value => new Option(value || "自動（工具預設）", value)));
+  desktopModel.value = model;
 }
 
 function setButtonBusy(button: HTMLButtonElement | HTMLSelectElement, value: boolean): void {

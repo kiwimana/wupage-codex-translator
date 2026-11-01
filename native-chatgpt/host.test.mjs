@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { codexArguments, encodeMessage, runProcess, translate, validateRequest } from './host.mjs';
+import { accountEnvironment, claudeArguments, codexArguments, encodeMessage, manageAccount, runGemini, runProcess, translate, validateRequest } from './host.mjs';
 
 test('ephemeral execution has no response file, shell tool, plugins or agent delegation', () => {
   const args = codexArguments('/example');
@@ -17,6 +17,95 @@ test('reject invalid protocol fields and bound input size', () => {
   for (const input of [{}, { type: 'translate', texts: [], targetLang: 'en' },
     { type: 'translate', texts: ['x'.repeat(32001)], targetLang: 'en' },
     { type: 'translate', texts: ['x'], targetLang: 'en; rm' }]) assert.throws(() => validateRequest(input));
+});
+
+test('validates the engine and model as data, never as shell arguments', () => {
+  for (const extra of [{ engine: 'unknown' }, { model: '--help' }, { model: 'haiku;whoami' }, { model: 'x'.repeat(129) }]) {
+    assert.throws(() => validateRequest({ type: 'translate', texts: ['x'], targetLang: 'en', ...extra }));
+  }
+  const codex = codexArguments('/example', 'gpt-6-luna');
+  assert.equal(codex[codex.indexOf('--model') + 1], 'gpt-6-luna'); assert.equal(codex.at(-1), '-');
+  const claude = claudeArguments('{}', 'haiku');
+  assert.equal(claude[claude.indexOf('--model') + 1], 'haiku');
+  assert.equal(claude[claude.indexOf('--tools') + 1], '');
+  assert.ok(claude.includes('--no-session-persistence')); assert.ok(claude.includes('--restricted'));
+  assert.ok(!claude.includes('--bare')); assert.ok(!claude.some(a => a.includes('skip-permissions')));
+  assert.equal(accountEnvironment({ GEMINI_API_KEY: 'unused', ANTHROPIC_API_KEY: 'unused', OPENAI_API_KEY: 'unused', PATH: 'keep' }).PATH, 'keep');
+  for (const name of ['GEMINI_API_KEY', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY']) assert.equal(accountEnvironment({ [name]: 'unused' })[name], undefined);
+});
+
+test('Claude uses subscription login, selected model and validated structured output', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'wupage-host-test-'));
+  try {
+    await fs.writeFile(path.join(dir, 'bridge.config.json'), JSON.stringify({ claudePath: process.execPath }));
+    await fs.writeFile(path.join(dir, 'translation-schema.json'), '{"type":"object"}');
+    const calls = [];
+    const fake = async (binary, args, options) => {
+      calls.push({ args, options });
+      return args[0] === 'auth' ? { code: 0, stdout: '{"loggedIn":true,"authMethod":"claude.ai"}', stderr: '' }
+        : { code: 0, stdout: '{"structured_output":{"translations":["你好"]}}', stderr: '' };
+    };
+    assert.deepEqual(await translate({ type: 'translate', engine: 'claude', model: 'haiku', texts: ['Hello'], targetLang: 'zh-TW' }, undefined, fake, dir), { ok: true, translations: ['你好'] });
+    assert.equal(calls[1].args[calls[1].args.indexOf('--model') + 1], 'haiku');
+    assert.ok(calls[1].options.input.includes('UNTRUSTED SOURCE TEXT'));
+    await assert.rejects(translate({ type: 'translate', engine: 'claude', texts: ['x'], targetLang: 'en' }, undefined,
+      async () => ({ code: 0, stdout: '{"loggedIn":true,"authMethod":"api_key"}', stderr: '' }), dir), /API/);
+  } finally { await fs.rm(dir, { recursive: true, force: true }); }
+});
+
+test('Gemini confines history and credentials to an owned temporary home and cleans success, failure and cancellation', async () => {
+  const home = await fs.mkdtemp(path.join(os.tmpdir(), 'wupage-host-test-'));
+  const previousHome = process.env.GEMINI_CLI_HOME;
+  try {
+    await fs.mkdir(path.join(home, '.gemini')); await fs.writeFile(path.join(home, '.gemini/oauth_creds.json'), '{}');
+    process.env.GEMINI_CLI_HOME = home;
+    const request = { type: 'translate', engine: 'gemini', model: 'flash', texts: ['Hello'], targetLang: 'zh-TW' };
+    for (const mode of ['success', 'failure', 'cancel']) {
+      let job;
+      const controller = new AbortController();
+      const fake = async (_binary, args, options) => {
+        job = options.cwd;
+        assert.notEqual(job, home); assert.equal(options.env.GEMINI_CLI_HOME, job);
+        assert.equal(args[args.indexOf('--model') + 1], 'flash');
+        assert.equal(args.some(a => a.includes('Hello')), false);
+        const settings = JSON.parse(await fs.readFile(path.join(job, '.gemini/settings.json'), 'utf8'));
+        assert.deepEqual(settings.tools.core, []); assert.equal(settings.mcp.enabled, false);
+        await fs.writeFile(path.join(job, 'test-history.json'), 'temporary translation');
+        if (mode === 'failure') throw new Error('failed');
+        if (mode === 'cancel') { controller.abort(new Error('stopped')); throw controller.signal.reason; }
+        return { code: 0, stdout: '{"response":"{\\"translations\\":[\\"你好\\"]}"}', stderr: '' };
+      };
+      const work = runGemini({ geminiPath: process.execPath }, request, controller.signal, fake, {});
+      if (mode === 'success') await work; else await assert.rejects(work);
+      await assert.rejects(fs.access(job));
+      assert.equal(await fs.readFile(path.join(home, '.gemini/oauth_creds.json'), 'utf8'), '{}');
+    }
+  } finally {
+    if (previousHome === undefined) delete process.env.GEMINI_CLI_HOME; else process.env.GEMINI_CLI_HOME = previousHome;
+    await fs.rm(home, { recursive: true, force: true });
+  }
+});
+
+test('detect only checks installed files, never launches a tool or claims authenticated', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'wupage-host-test-'));
+  try {
+    await fs.writeFile(path.join(dir, 'bridge.config.json'), JSON.stringify({ codexPath: process.execPath, claudePath: process.execPath }));
+    let called = false;
+    const fake = async () => { called = true; throw new Error('Must not run during detection'); };
+    assert.deepEqual(await manageAccount({ type: 'detect', engine: 'claude' }, undefined, fake, dir),
+      { ok: true, engine: 'claude', installed: true, login: 'unchecked', bridgeVersion: 2 });
+    assert.equal((await manageAccount({ type: 'detect', engine: 'gemini' }, undefined, fake, dir)).installed, false);
+    assert.equal(called, false);
+    await assert.rejects(manageAccount({ type: 'connect', engine: 'gemini' }, undefined, fake, dir), /未偵測/);
+    await assert.rejects(manageAccount({ type: 'connect', engine: 'claude;whoami' }, undefined, fake, dir));
+    if (process.platform === 'win32') {
+      const opened = await manageAccount({ type: 'connect', engine: 'claude' }, undefined, async (_binary,args) => {
+        assert.equal(args.at(-1), 'claude'); assert.equal(args[args.indexOf('-File')+1], path.join(dir, 'connect.ps1'));
+        return { code: 0, stdout: '', stderr: '' };
+      }, dir);
+      assert.equal(opened.launched, true); assert.equal(opened.login, 'unchecked');
+    }
+  } finally { await fs.rm(dir, { recursive: true, force: true }); }
 });
 test('native packet lengths use UTF-8 bytes, including Traditional Chinese', () => {
   const data = { ok: true, translations: ['繁體中文'] }, packet = encodeMessage(data);

@@ -29,8 +29,12 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   translationDisplayMode: "bilingual",
   providers: [
     ...(CHATGPT_BUILD ? [{ type: "chatgpt-desktop" as const, id: "chatgpt-desktop",
-      label: "ChatGPT 帳號（Codex・不存對話）", enabled: true,
-      performanceMode: "custom" as const, chunkSize: 4000, concurrency: 1 }] : []),
+      label: "ChatGPT 帳號（Codex・不存對話）", engine: "codex" as const, model: "", enabled: true,
+      performanceMode: "custom" as const, chunkSize: 4000, concurrency: 1 },
+      { type: "chatgpt-desktop" as const, id: "gemini-desktop", engine: "gemini" as const, model: "",
+        label: "Gemini 帳號（Gemini CLI）", enabled: true, performanceMode: "custom" as const, chunkSize: 4000, concurrency: 1 },
+      { type: "chatgpt-desktop" as const, id: "claude-desktop", engine: "claude" as const, model: "",
+        label: "Claude 帳號（Claude Code・不存對話）", enabled: true, performanceMode: "custom" as const, chunkSize: 4000, concurrency: 1 }] : []),
     {
       type: "microsoft-web-translate",
       id: "microsoft-web-translate",

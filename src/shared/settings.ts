@@ -146,6 +146,9 @@ function normalizeProvider(
     const label = (traditionalPresetLabels as Record<string, string>)[provider.label];
     if (label) provider = { ...provider, label };
   }
+  if (provider.type === "chatgpt-desktop") {
+    provider = { ...provider, engine: provider.engine ?? "codex", model: typeof provider.model === "string" ? provider.model.trim() : "" };
+  }
   if (provider.type === "doubao-web") {
     return {
       type: "doubao-web",
@@ -235,6 +238,8 @@ function isProviderConfig(value: unknown): value is ProviderConfig {
   ) return false;
   if (value.chunkSize !== undefined && typeof value.chunkSize !== "number") return false;
   if (value.concurrency !== undefined && typeof value.concurrency !== "number") return false;
+  if (value.type === "chatgpt-desktop" && (value.engine !== undefined && !["codex", "gemini", "claude"].includes(String(value.engine))
+    || value.model !== undefined && typeof value.model !== "string")) return false;
   if (value.type === "chatgpt-desktop" || value.type === "google-web-translate" || value.type === "microsoft-web-translate"
     || value.type === "tencent-transmart" || value.type === "yandex-web-translate"
     || value.type === "volcengine-web-translate" || value.type === "mymemory"

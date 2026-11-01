@@ -22,7 +22,7 @@ extension = output / f'wupage-codex-{version}-firefox.zip'
 bridge = output / f'wupage-codex-{version}-windows-bridge.zip'
 source = output / f'wupage-codex-{version}-source.zip'
 bridge_names = ['host.mjs', 'launcher.cs', 'translation-schema.json', 'install.ps1',
-                'uninstall.ps1', 'repair.cmd', 'README.md']
+                'uninstall.ps1', 'repair.cmd', 'connect.ps1', 'README.md']
 with zipfile.ZipFile(extension, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
     for path in sorted(build.rglob('*')):
         if path.is_file():

@@ -11,7 +11,7 @@ const serviceMarks = {
   mymemory: '<svg viewBox="0 0 24 24"><path d="M4 2h16a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H9l-5 4v-4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Z" fill="#116466"/><path d="M6 15V6h3l3 4 3-4h3v9h-3v-5l-3 4-3-4v5Z" fill="#fff"/></svg>'
 };
 
-export function providerIconMarkup(provider: Pick<ProviderConfig, "type"> | undefined): string {
+export function providerIconMarkup(provider: (Pick<ProviderConfig, "type"> & { engine?: "codex" | "gemini" | "claude" }) | undefined): string {
   let icon: keyof typeof icons | keyof typeof serviceMarks | "local" | "generic";
   switch (provider?.type) {
     case "microsoft-web-translate":
@@ -25,7 +25,7 @@ export function providerIconMarkup(provider: Pick<ProviderConfig, "type"> | unde
     case "mymemory": icon = "mymemory"; break;
     case "deepseek": icon = "deepseek-color"; break;
     case "zhipu-glm": icon = "zhipu-color"; break;
-    case "chatgpt-desktop":
+    case "chatgpt-desktop": icon = provider.engine === "gemini" ? "google-color" : provider.engine === "claude" ? "anthropic" : "openai"; break;
     case "openai-compatible": icon = "openai"; break;
     case "anthropic-compatible": icon = "anthropic"; break;
     case "firefox-local": icon = "local"; break;

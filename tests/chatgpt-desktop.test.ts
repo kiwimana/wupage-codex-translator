@@ -14,7 +14,7 @@ function bridge() {
   return { port, connectNative, storage, reply: (message: unknown) => messages.forEach(fn => fn(message)),
     close: () => closed.forEach(fn => fn()) };
 }
-const config = { id: "chatgpt-desktop", type: "chatgpt-desktop" as const, label: "ChatGPT" };
+const config = { id: "chatgpt-desktop", type: "chatgpt-desktop" as const, label: "ChatGPT", model: "" };
 const request = { texts: ["Hello world"], targetLang: "zh-TW", sourceLang: "en" };
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 
@@ -30,6 +30,23 @@ describe("on-demand ephemeral desktop translation", () => {
     fake.reply({ ok: true, translations: ["你好，世界"] });
     await expect(result).resolves.toEqual(["你好，世界"]);
     expect(fake.port.disconnect).toHaveBeenCalledOnce();
+  });
+  it.each(["codex", "gemini", "claude"] as const)("passes %s and its model through the local bridge without opening another service", async engine => {
+    const fake = bridge();
+    const result = new ChatGPTDesktopProvider({ ...config, engine, model: "selected-model" }).translateBatch(request);
+    expect(fake.port.postMessage).toHaveBeenCalledWith({type:"detect",engine});
+    fake.reply({ok:true,engine,installed:true,login:"unchecked",bridgeVersion:2});
+    await vi.waitFor(()=>expect(fake.port.postMessage).toHaveBeenCalledWith(expect.objectContaining({type:"translate"})));
+    expect(fake.port.postMessage).toHaveBeenCalledWith(expect.objectContaining({ engine, model: "selected-model" }));
+    fake.reply({ ok: true, translations: ["你好"] }); await expect(result).resolves.toEqual(["你好"]);
+    expect(fake.connectNative).toHaveBeenCalledTimes(2);
+  });
+  it("rejects an old bridge before it can silently translate with the wrong engine or model",async()=>{
+    const fake=bridge();
+    const result=new ChatGPTDesktopProvider({...config,engine:"gemini",model:"flash"}).translateBatch(request);
+    fake.reply({ok:false,error:"Invalid request"});
+    await expect(result).rejects.toThrow("更新橋接");
+    expect(fake.port.postMessage.mock.calls.some(([r])=>r.type==="translate")).toBe(false);
   });
   it("disconnects on stop and cannot publish a late response", async () => {
     const fake = bridge(); const controller = new AbortController();

@@ -19,6 +19,7 @@ import { frameSessions } from "./frame-sessions";
 import type { FrameSessionRequest } from "../shared/frame-session";
 import { readParagraphMode } from "../shared/paragraph-mode";
 import { saveParagraphMode } from "./paragraph-mode";
+import { desktopAccountAction } from "./chatgpt-desktop";
 
 frameSessions.install();
 initVideoSettings();
@@ -148,6 +149,12 @@ async function handleMessage(request: RuntimeRequest, sender: chrome.runtime.Mes
         ...(sender.tab?.id !== undefined ? { frames: await frameSessions.diagnostics(sender.tab.id) } : {}) };
     case "CLEAR_CACHE":
       return clearTranslationCache();
+    case "DESKTOP_ACCOUNT_STATUS":
+    case "CONNECT_DESKTOP_ACCOUNT": {
+      if (sender.id !== chrome.runtime.id || sender.url?.split(/[?#]/u)[0] !== chrome.runtime.getURL("options.html")) throw new Error("請從擴充設定頁偵測或連結本機工具。");
+      if (!["codex", "gemini", "claude"].includes(request.engine)) throw new Error("不支援的帳號服務。");
+      return desktopAccountAction(request.engine, request.type === "CONNECT_DESKTOP_ACCOUNT");
+    }
     case "TEST_PROVIDER": {
       const settings = await getSettings();
       const providerConfig = settings.providers.find(

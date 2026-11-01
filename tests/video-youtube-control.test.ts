@@ -88,6 +88,13 @@ it('follows another CC language and a changed target language',async()=>{
   expect(vi.mocked(sendRuntimeRequest).mock.calls.some(([r])=>r.type==='TRANSLATE_VIDEO_SUBTITLES'&&r.sourceLang==='fr'&&r.targetLang==='de')).toBe(true);
   expect(player.view.root.querySelector('.translation span')!.textContent).toBe('Deutsche Untertitel');
 });
+it('uses the selected desktop account and its model for CC instead of forcing Codex',async()=>{
+  settings={...settings,activeProviderId:'claude-desktop',providers:[...settings.providers,{id:'claude-desktop',type:'chatgpt-desktop',engine:'claude',model:'haiku',label:'Claude'}]};
+  changed.forEach(fn=>fn({[SETTINGS_KEY]:{newValue:settings}},'local'));await flush();
+  button().click();await flush();
+  expect(vi.mocked(sendRuntimeRequest).mock.calls.some(([r])=>r.type==='TRANSLATE_VIDEO_SUBTITLES'&&r.providerId==='claude-desktop')).toBe(true);
+  expect(player.view.root.querySelector<HTMLSelectElement>('.provider')!.disabled).toBe(false);
+});
 it('captures the selected CC before restoring tracks during a restart',async()=>{
   button().click();await flush();
   english.mode='hidden';french.mode='showing';

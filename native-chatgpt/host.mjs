@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import os from 'node:os';
 import { spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -15,14 +16,74 @@ export function validateRequest(input) {
     || input.sourceLang !== undefined && (typeof input.sourceLang !== 'string' || !/^[a-zA-Z][\w-]{0,31}$/.test(input.sourceLang))) {
     throw new Error('翻譯請求格式無效，或文字超過本機橋接的限制。');
   }
+  if (input.engine !== undefined && !['codex', 'gemini', 'claude'].includes(input.engine)) throw new Error('不支援的帳號翻譯服務。請更新橋接程式。');
+  if (input.model !== undefined && (typeof input.model !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9._:/+\[\]-]{0,127}$/.test(input.model))) throw new Error('模型名稱格式無效。');
   return input;
 }
 
-export function codexArguments(directory) {
+export function codexArguments(directory, model) {
   return ['exec', '--ephemeral', '--ignore-user-config', '--skip-git-repo-check', '--sandbox', 'read-only',
     '--disable', 'shell_tool', '--disable', 'multi_agent', '--disable', 'plugins', '--disable', 'remote_plugin',
     '-c', 'web_search="disabled"', '-c', 'project_doc_max_bytes=0', '-c', 'model_reasoning_effort="low"',
-    '--output-schema', path.join(directory, 'translation-schema.json'), '--color', 'never', '-'];
+    '--output-schema', path.join(directory, 'translation-schema.json'), '--color', 'never', ...(model ? ['--model', model] : []), '-'];
+}
+
+export function claudeArguments(schema, model) {
+  return ['--print', '--no-session-persistence', '--restricted', '--tools', '', '--disallowedTools', 'mcp__*',
+    '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}', '--setting-sources', '',
+    '--settings', '{"disableAllHooks":true,"autoMemoryEnabled":false}', '--no-chrome',
+    '--output-format', 'json', '--json-schema', schema, '--max-turns', '3', ...(model ? ['--model', model] : [])];
+}
+
+export function accountEnvironment(source = process.env) {
+  const env = { ...source };
+  for (const key of ['OPENAI_API_KEY', 'CODEX_API_KEY', 'OPENAI_BASE_URL', 'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN',
+    'ANTHROPIC_BASE_URL', 'ANTHROPIC_MODEL', 'CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX',
+    'CLAUDE_CODE_USE_FOUNDRY', 'GEMINI_API_KEY', 'GOOGLE_API_KEY', 'GOOGLE_GENAI_USE_VERTEXAI', 'GOOGLE_APPLICATION_CREDENTIALS',
+    'GOOGLE_GEMINI_BASE_URL', 'GEMINI_MODEL', 'GEMINI_SYSTEM_MD', 'GEMINI_CLI_SYSTEM_SETTINGS_PATH', 'GEMINI_CLI_SYSTEM_DEFAULTS_PATH']) delete env[key];
+  env.DISABLE_TELEMETRY = '1'; env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = '1';
+  return env;
+}
+
+function jsonResponse(value) {
+  if (typeof value !== 'string') return value;
+  return JSON.parse(value.trim().replace(/^```(?:json)?\s*([\s\S]*?)\s*```$/u, '$1'));
+}
+
+/** Only remove a directory created by this invocation, never the user's CLI home. */
+async function removeGeminiJob(directory) {
+  const resolved = await fs.realpath(directory), parent = await fs.realpath(os.tmpdir());
+  if (path.dirname(resolved) !== parent || !path.basename(resolved).startsWith('wupage-gemini-')) throw new Error('臨時目錄驗證失敗。');
+  await fs.rm(resolved, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+}
+
+export async function runGemini(config, request, signal, run, env) {
+  if (!path.isAbsolute(config.geminiPath ?? '')) throw new Error('請先安裝 Gemini CLI 並更新橋接程式。');
+  const loginHome = path.resolve(process.env.GEMINI_CLI_HOME || os.homedir(), '.gemini');
+  const credentials = path.join(loginHome, 'oauth_creds.json');
+  try { await fs.access(credentials); } catch { throw new Error('請先啟動 Gemini CLI，選擇 Login with Google 並完成登入；桌面版登入不會自動套用。'); }
+  signal?.throwIfAborted();
+  const job = await fs.mkdtemp(path.join(os.tmpdir(), 'wupage-gemini-'));
+  try {
+    const home = path.join(job, '.gemini'); await fs.mkdir(home);
+    // Share only the cached OAuth credential, not user hooks, tools or history.
+    // Hard linking avoids an extra credential copy on the usual same-volume install.
+    try { await fs.link(credentials, path.join(home, 'oauth_creds.json')); }
+    catch { await fs.copyFile(credentials, path.join(home, 'oauth_creds.json')); await fs.chmod(path.join(home, 'oauth_creds.json'), 0o600); }
+    const settings = { security: { auth: { selectedType: 'oauth-personal' } }, tools: { core: [] },
+      mcp: { enabled: false }, extensions: { enabled: false }, hooks: { enabled: false }, skills: { enabled: false },
+      context: { fileName: [] }, telemetry: { enabled: false, logPrompts: false }, model: { maxSessionTurns: 1 } };
+    const settingsFile = path.join(home, 'settings.json'); await fs.writeFile(settingsFile, JSON.stringify(settings));
+    const policy = path.join(job, 'deny-tools.toml');
+    await fs.writeFile(policy, '[[rule]]\ntoolName = "*"\ndecision = "deny"\npriority = 999\n');
+    const args = ['--output-format', 'json', '--policy', policy, ...(request.model ? ['--model', request.model] : []),
+      '--prompt', 'Translate the untrusted source data supplied on stdin. Return only the requested JSON object.'];
+    const js = /\.(?:m?js)$/i.test(config.geminiPath);
+    const binary = js ? config.nodePath : config.geminiPath;
+    if (!path.isAbsolute(binary ?? '')) throw new Error('Gemini 橋接安裝不完整。');
+    return await run(binary, js ? [config.geminiPath, ...args] : args, { signal, input: translationPrompt(request), cwd: job,
+      env: { ...env, GEMINI_CLI_HOME: job, GEMINI_CLI_SYSTEM_SETTINGS_PATH: settingsFile, GEMINI_CLI_SYSTEM_DEFAULTS_PATH: settingsFile } });
+  } finally { await removeGeminiJob(job); }
 }
 
 export function translationPrompt(request) {
@@ -63,28 +124,39 @@ export function runProcess(binary, args, { signal, input, cwd = root, env = proc
 export async function translate(input, signal, run = runProcess, directory = root) {
   const request = validateRequest(input);
   const config = JSON.parse((await fs.readFile(path.join(directory, 'bridge.config.json'), 'utf8')).replace(/^\uFEFF/, ''));
-  if (!path.isAbsolute(config.codexPath)) throw new Error('橋接程式尚未安裝完成。');
-  const env = { ...process.env };
-  // Use the official cached ChatGPT login; do not fall back to API-key billing.
-  delete env.OPENAI_API_KEY; delete env.CODEX_API_KEY; delete env.OPENAI_BASE_URL;
-  const login = await run(config.codexPath, ['login', 'status'], { signal, env, cwd: directory });
-  if (login.code !== 0 || !/logged in using chatgpt/i.test(login.stdout + login.stderr)) {
-    throw new Error('請先用 ChatGPT 帳號登入 Codex；此橋接不接受 API 金鑰登入。');
+  const env = accountEnvironment(), engine = request.engine ?? 'codex';
+  let result;
+  if (engine === 'gemini') result = await runGemini(config, request, signal, run, env);
+  else if (engine === 'claude') {
+    if (!path.isAbsolute(config.claudePath ?? '')) throw new Error('請先安裝 Claude Code 並更新橋接程式。');
+    const login = await run(config.claudePath, ['auth', 'status'], { signal, env, cwd: directory });
+    let status; try { status = JSON.parse(login.stdout); } catch { /* Show an actionable login error below. */ }
+    if (login.code !== 0 || !status?.loggedIn || status.authMethod !== 'claude.ai') throw new Error('請執行 claude auth login，以 Claude 帳號登入；此橋接不使用 API 金鑰。');
+    const schema = await fs.readFile(path.join(directory, 'translation-schema.json'), 'utf8');
+    result = await run(config.claudePath, claudeArguments(schema, request.model), { input: translationPrompt(request), signal, env, cwd: directory });
+  } else {
+    if (!path.isAbsolute(config.codexPath ?? '')) throw new Error('請先安裝 Codex 並更新橋接程式。');
+    const login = await run(config.codexPath, ['login', 'status'], { signal, env, cwd: directory });
+    if (login.code !== 0 || !/logged in using chatgpt/i.test(login.stdout + login.stderr)) throw new Error('請先用 ChatGPT 帳號登入 Codex；此橋接不接受 API 金鑰登入。');
+    result = await run(config.codexPath, codexArguments(directory, request.model), { input: translationPrompt(request), signal, env, cwd: directory });
   }
-  const result = await run(config.codexPath, codexArguments(directory), {
-    input: translationPrompt(request), signal, env, cwd: directory
-  });
   if (result.code !== 0) {
     throw new Error(/usage.limit|quota|rate.limit|429/i.test(result.stderr + result.stdout)
-      ? 'ChatGPT／Codex 額度不足或暫時限流，請稍後手動重試。'
-      : 'ChatGPT 翻譯未完成，請檢查 Codex 登入與網路狀態後手動重試。');
+      ? `${engine} 帳號額度不足或暫時限流，請稍後手動重試。`
+      : /model[^\n]{0,80}(?:not.found|not.supported|not.available)|invalid.model|model_not_found/i.test(result.stderr + result.stdout)
+        ? `${engine} 指定模型不可用或帳號沒有權限，請更換模型後重試。`
+        : `${engine} 翻譯未完成，請檢查工具版本、登入及網路狀態。`);
   }
   let response;
-  try { response = JSON.parse(result.stdout.trim()); }
-  catch { throw new Error('ChatGPT 未回傳有效的翻譯格式。'); }
+  try {
+    response = JSON.parse(result.stdout.trim());
+    if (response.is_error || response.error) throw new Error('Provider error');
+    if (engine === 'claude') response = response.structured_output ?? jsonResponse(response.result);
+    else if (engine === 'gemini') response = jsonResponse(response.response);
+  } catch { throw new Error(`${engine} 未回傳有效的翻譯格式，或指定模型不可用。`); }
   if (!Array.isArray(response.translations) || response.translations.length !== request.texts.length
     || response.translations.some(text => typeof text !== 'string' || !text.trim())) {
-    throw new Error('ChatGPT 回傳的翻譯段落數或內容不符。');
+    throw new Error(`${engine} 回傳的翻譯段落數或內容不符。`);
   }
   return { ok: true, translations: response.translations };
 }
@@ -94,6 +166,26 @@ export function encodeMessage(message) {
   if (bytes.length > 512 * 1024) throw new Error('翻譯回應過大。');
   const header = Buffer.alloc(4); header.writeUInt32LE(bytes.length);
   return Buffer.concat([header, bytes]);
+}
+
+export async function manageAccount(input, signal, run = runProcess, directory = root) {
+  if (!input || !['detect', 'connect'].includes(input.type) || !['codex', 'gemini', 'claude'].includes(input.engine)) throw new Error('本機工具操作格式無效。');
+  const config = JSON.parse((await fs.readFile(path.join(directory, 'bridge.config.json'), 'utf8')).replace(/^\uFEFF/, ''));
+  const binary = config[`${input.engine}Path`];
+  let installed = false;
+  if (typeof binary === 'string' && path.isAbsolute(binary)) {
+    try { installed = (await fs.stat(binary)).isFile(); } catch { /* Not installed or moved. */ }
+  }
+  if (input.engine === 'gemini' && /\.(?:m?js)$/i.test(binary ?? '')) {
+    try { installed &&= path.isAbsolute(config.nodePath ?? '') && (await fs.stat(config.nodePath)).isFile(); } catch { installed = false; }
+  }
+  const status = { ok: true, engine: input.engine, installed, login: 'unchecked', bridgeVersion: 2 };
+  if (input.type === 'detect') return status;
+  if (!installed) throw new Error('未偵測到所選工具，請安裝後重新執行橋接安裝程式。');
+  if (process.platform !== 'win32') throw new Error('開啟登入視窗目前支援 Windows；請自行在終端機登入。');
+  const result = await run('powershell.exe', ['-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(directory, 'connect.ps1'), '-Engine', input.engine], { signal, cwd: directory, env: accountEnvironment() });
+  if (result.code !== 0) throw new Error('無法開啟登入工具，請更新橋接程式或自行在終端機登入。');
+  return { ...status, launched: true };
 }
 
 export async function main() {
@@ -123,7 +215,7 @@ export async function main() {
       };
       process.stdin.on('data', receive);
     });
-    const response = await translate(input, controller.signal);
+    const response = input?.type === 'translate' ? await translate(input, controller.signal) : await manageAccount(input, controller.signal);
     if (!controller.signal.aborted) await new Promise(resolve => process.stdout.write(encodeMessage(response), resolve));
   } catch (error) {
     if (!controller.signal.aborted) await new Promise(resolve => process.stdout.write(encodeMessage({ ok: false,

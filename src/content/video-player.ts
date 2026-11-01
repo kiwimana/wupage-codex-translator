@@ -13,6 +13,7 @@ import { MAX_SUBTITLE_FILE_BYTES, parseSubtitles, SubtitleTranslator, subtitleTe
 import { LiveSubtitleTranslator } from "../video/live-subtitles";
 import { CHATGPT_BUILD } from "../shared/chatgpt-build";
 import { YouTubeAiControl } from "./youtube-ai-control";
+import { accountVideoProviderId } from "../shared/desktop-account";
 
 export class PlayerSubtitleController {
   readonly view: VideoView;
@@ -451,7 +452,7 @@ export class PlayerSubtitleController {
     const previous = this.settings;
     this.applySettings(settings);
     const signature = (value: ExtensionSettings) => {
-      const providerId = CHATGPT_BUILD ? "chatgpt-desktop" : value.activeProviderId;
+      const providerId = CHATGPT_BUILD ? accountVideoProviderId(value) : value.activeProviderId;
       return JSON.stringify([value.sourceLang, value.targetLang, providerId,
         value.providers.find(provider => provider.id === providerId), normalizeVideoTranslation(value.videoTranslation).preferredSource]);
     };
@@ -464,7 +465,7 @@ export class PlayerSubtitleController {
   }
 
   private applySettings(settings: ExtensionSettings): void {
-    this.settings = CHATGPT_BUILD ? { ...settings, activeProviderId: "chatgpt-desktop" } : settings;
+    this.settings = CHATGPT_BUILD ? { ...settings, activeProviderId: accountVideoProviderId(settings) } : settings;
     this.preferences = normalizeVideoTranslation(settings.videoTranslation); this.view.settings(this.settings, this.site);
     this.refreshYouTubeControl();
   }

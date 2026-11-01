@@ -44,6 +44,13 @@ button:focus-visible, select:focus-visible { outline: 2px solid var(--wp-accent)
 #openPdfWorkspace { color: var(--wp-foreground); background: var(--wp-surface); border: 1px solid var(--wp-border); font-weight: 500; }
 #debug, #clearCache { order: 2; min-height: 26px; font-size: 11px; font-weight: 400; color: var(--wp-muted); background: transparent; }
 #translateCc { min-height: 40px; margin-top: 0; border: 1px solid var(--wp-border); border-radius: 11px; color: var(--wp-accent); background: var(--wp-selected); font-size: 12px; font-weight: 600; }
+.desktop-model-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 8px; }
+.desktop-model-row[hidden] { display: none; }
+.popup:has(.desktop-model-row:not([hidden])) { padding-block: 12px; gap: 9px; }
+.popup:has(.desktop-model-row:not([hidden])) .popup-top { gap: 10px; }
+.desktop-model-row label { min-width: 0; display: grid; gap: 5px; color: var(--wp-muted); font-size: 11px; }
+.desktop-model-row select { min-width: 0; width: 100%; height: 34px; font-size: 12px; }
+.desktop-model-row button { min-height: 34px; padding: 0 10px; border: 1px solid var(--wp-border); border-radius: 10px; background: var(--wp-surface); font-size: 11px; }
 #translateCc:hover:enabled { background: var(--wp-soft); }
 #translateCc[aria-pressed="true"] { color: var(--wp-on-accent); background: var(--wp-accent); }
 #translateCc[aria-busy="true"]::after { content: ""; display: inline-block; flex: 0 0 14px; width: 14px; height: 14px; box-sizing: border-box; margin-left: 8px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: popup-spin 780ms linear infinite; }

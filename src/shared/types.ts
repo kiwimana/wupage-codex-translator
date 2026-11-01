@@ -94,6 +94,9 @@ export interface FirefoxLocalConfig extends ProviderBaseConfig {
 
 export interface ChatGPTDesktopConfig extends ProviderBaseConfig {
   type: "chatgpt-desktop";
+  /** Legacy type retained for existing Codex configurations. */
+  engine?: "codex" | "gemini" | "claude";
+  model: string;
 }
 
 export interface MicrosoftTranslatorConfig extends ProviderBaseConfig {
@@ -311,6 +314,7 @@ export interface TranslatorProvider {
 }
 
 export type RuntimeRequest =
+  | { type: "DESKTOP_ACCOUNT_STATUS" | "CONNECT_DESKTOP_ACCOUNT"; engine: "codex" | "gemini" | "claude" }
   | import("./frame-session").FrameSessionRequest
   | { type: "EXECUTE_TRANSLATION_SHORTCUT"; command: TranslationShortcut }
   | { type: "LOOKUP_DICTIONARY"; query: string; provider: DictionaryProvider }

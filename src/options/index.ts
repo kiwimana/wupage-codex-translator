@@ -1,5 +1,6 @@
 import { BUILT_IN_PROVIDER_IDS, DEFAULT_SETTINGS } from "../shared/defaults";
 import { CHATGPT_BUILD } from "../shared/chatgpt-build";
+import { DESKTOP_ACCOUNTS, desktopEngine, type DesktopAccountStatus } from "../shared/desktop-account";
 import { normalizeFrameTranslation } from "../shared/frame-session";
 import { SOURCE_LANGUAGES, TARGET_LANGUAGES } from "../shared/languages";
 import { TRANSLATION_DISPLAY_MODES } from "../shared/display-modes";
@@ -310,7 +311,7 @@ function renderProviderForm(): void {
   disposeLocalControl?.(); disposeLocalControl = undefined;
   const provider = getEditingProvider();
   providerPerformance.innerHTML = provider.type === "chatgpt-desktop"
-    ? '<p class="hint">ChatGPT 翻譯固定分塊大小 4000、並發數 1；不保存永久譯文快取。</p>'
+    ? '<p class="hint">帳號翻譯固定分塊大小 4000、並發數 1；不保存永久譯文快取。</p>'
     : provider.type === "firefox-local"
     ? '<p class="hint">本地翻译使用固定分块大小 800、并发数 1。</p>'
     : provider.type === "doubao-web"
@@ -350,11 +351,35 @@ function renderProviderForm(): void {
     return;
   }
   if (provider.type === "chatgpt-desktop") {
+    const engine = desktopEngine(provider), account = DESKTOP_ACCOUNTS[engine];
     setProviderFormMarkup(provider, `<div class="grid"><label>顯示名稱 <input data-field="label" type="text" value="${escapeAttr(provider.label)}" /></label></div>
-      <p>使用本機已登入 ChatGPT 的 Codex，不需 API 金鑰。請先執行套件附帶的橋接安裝程式。</p>
-      <p>按下翻譯才傳送文字；每批使用臨時工作，不儲存本機對話或永久譯文快取。用量計入 ChatGPT／Codex 方案。這不是 ChatGPT 網頁的「臨時聊天」。</p>
-      <p>適合網頁與文字 PDF；影片即時字幕可能因回應時間較長而逾時。停止後會取消正在進行的本機工作。</p>
-      <button id="test" type="button">測試翻譯（會使用少量額度）</button>`);
+      ${renderModelControl(provider)}
+      <div class="desktop-account-link">
+        <p data-role="desktop-account-status" role="status">尚未偵測 · 帳號未驗證</p>
+        <button type="button" data-action="desktop-detect">偵測本機工具</button>
+        <button type="button" data-action="desktop-connect" disabled>連結帳號（開啟登入）</button>
+      </div>
+      <p>使用本機 ${account.app} 已登入的帳號，不需 API 金鑰。先更新橋接程式，並完成登入：<code>${account.login}</code>。桌面聊天程式的登入不一定與此工具共用。</p>
+      <p>「自動」使用工具預設模型；可選預設模型或按「＋」輸入完整模型名稱。實際可用模型與用量依你的帳號方案；指定模型失敗會顯示錯誤，不會切換其他服務。</p>
+      <p>只有按下翻譯才傳送文字，停止後取消工作。${engine === "gemini" ? "使用獨立臨時工作目錄，工作結束後清理該次本機紀錄。" : "不保存此次本機對話紀錄。"}不保存永久譯文快取；服務端留存依各服務政策。</p>`);
+    const detect = providerForm.querySelector<HTMLButtonElement>("[data-action='desktop-detect']")!;
+    const connect = providerForm.querySelector<HTMLButtonElement>("[data-action='desktop-connect']")!;
+    const state = providerForm.querySelector<HTMLElement>("[data-role='desktop-account-status']")!;
+    const act = async (connecting: boolean) => {
+      detect.disabled = true; connect.disabled = true;
+      state.textContent = connecting ? "正在開啟登入工具…" : "正在偵測本機安裝（不登入、不送出翻譯）…";
+      try {
+        const result = await sendRuntimeMessage<DesktopAccountStatus>({ type: connecting ? "CONNECT_DESKTOP_ACCOUNT" : "DESKTOP_ACCOUNT_STATUS", engine });
+        if (version !== providerFormVersion) return;
+        connect.disabled = !result.installed;
+        state.textContent = !result.installed ? `未偵測到 ${account.app}，請先安裝並重新執行橋接安裝程式。`
+          : result.launched ? "已開啟登入視窗 · 帳號尚未驗證；完成後可手動按「測試服務」驗證。"
+          : `已偵測到 ${account.app} · 帳號尚未驗證。偵測未登入、未送出翻譯。`;
+      } catch (error) { if (version === providerFormVersion) state.textContent = error instanceof Error ? error.message : String(error); }
+      finally { if (version === providerFormVersion) detect.disabled = false; }
+    };
+    detect.addEventListener("click", () => { void act(false); });
+    connect.addEventListener("click", () => { void act(true); });
     return;
   }
   if (provider.type === "firefox-local") {
@@ -592,6 +617,7 @@ function updateUsageScheduling(): void {
 type ModelProvider = Extract<ProviderConfig, { model: string }>;
 
 function modelPresets(provider: ModelProvider): string[] {
+  if (provider.type === "chatgpt-desktop") return ["", ...DESKTOP_ACCOUNTS[desktopEngine(provider)].models];
   if (provider.type === "deepseek") return DEEPSEEK_MODEL_OPTIONS;
   if (provider.type === "zhipu-glm") return ZHIPU_MODEL_OPTIONS;
   return provider.type === "openai-compatible" ? LLM_MODEL_OPTIONS : [];
@@ -606,7 +632,7 @@ function renderModelControl(provider: ModelProvider): string {
   return `<div class="model-field">
     <label for="providerModel">模型</label>
     <div class="model-toolbar">
-      <select id="providerModel" data-field="model">${renderOptions(models, provider.model)}</select>
+      <select id="providerModel" data-field="model">${renderOptions(models, provider.model, provider.type === "chatgpt-desktop" ? "自動（工具預設）" : "")}</select>
       <button type="button" class="icon-button add-model" data-action="manage-model" title="添加或修改模型" aria-label="添加或修改模型">${uiIconMarkup("plus")}</button>
       ${renderTestButton()}
     </div>
@@ -1008,7 +1034,8 @@ function readProviderFromForm(provider: ProviderConfig): ProviderConfig {
     return { ...provider, label: field("label").trim() || provider.label,
       serviceMode: field("serviceMode") === "api" ? "api" : "free", api };
   }
-  if (provider.type === "chatgpt-desktop" || provider.type === "firefox-local" || provider.type === "doubao-web") {
+  if (provider.type === "chatgpt-desktop") return { ...provider, label: field("label").trim() || provider.label, model: field("model").trim() };
+  if (provider.type === "firefox-local" || provider.type === "doubao-web") {
     return { ...provider, label: field("label").trim() || provider.label };
   }
   if (provider.type === "microsoft-translator") {
@@ -1122,11 +1149,11 @@ function escapeAttr(value: string): string {
   return escapeHtml(value);
 }
 
-function renderOptions(values: string[], selected: string): string {
+function renderOptions(values: string[], selected: string, emptyLabel = ""): string {
   const options = values.includes(selected) ? values : [selected, ...values];
   return options
     .map((value) =>
-      `<option value="${escapeAttr(value)}" ${value === selected ? "selected" : ""}>${escapeHtml(value)}</option>`
+      `<option value="${escapeAttr(value)}" ${value === selected ? "selected" : ""}>${escapeHtml(value || emptyLabel)}</option>`
     )
     .join("");
 }

@@ -12,7 +12,7 @@ import zipfile
 
 IGNORED = {'.git', 'node_modules', '.npm-cache', 'artifacts', '__pycache__',
            'dist', 'dist-firefox', 'dist-firefox-chatgpt', 'dist-video-preview'}
-PRIVATE_NAMES = {'auth.json', 'credentials.json', 'logins.json', 'prefs.js', 'config.toml', 'bridge.config.json',
+PRIVATE_NAMES = {'auth.json', 'credentials.json', '.credentials.json', 'oauth_creds.json', 'google_accounts.json', 'logins.json', 'prefs.js', 'config.toml', 'bridge.config.json',
                  'org.wupage.codex_bridge.json', 'wupage-chatgpt-host.exe'}
 PRIVATE_PARTS = {'.codex', '.ssh', '.aws', 'browser-profile', 'sessionstore-backups'} | IGNORED
 RULES = {

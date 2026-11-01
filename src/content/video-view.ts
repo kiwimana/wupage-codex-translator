@@ -176,8 +176,8 @@ export class VideoView {
     }
     provider.value = settings.activeProviderId;
     if (CHATGPT_BUILD) {
-      provider.disabled = true;
-      provider.title = "AI CC 字幕使用已登入的 ChatGPT 帳號。";
+      for (const option of provider.options) option.disabled = settings.providers.find(p => p.id === option.value)?.type !== "chatgpt-desktop";
+      provider.title = "AI CC 字幕使用所選本機帳號與該服務設定的模型。";
     }
     this.root.querySelector<HTMLSelectElement>(".font")!.value = String(preferences.fontSize);
     this.root.querySelector<HTMLSelectElement>(".background")!.value = preferences.background;

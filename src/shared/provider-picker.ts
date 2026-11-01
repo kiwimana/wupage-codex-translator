@@ -1,6 +1,7 @@
 import { ensureProviderIconStyles, providerIconMarkup } from "./provider-icons";
 import type { ProviderConfig } from "./types";
 import { uiIconMarkup } from "./ui-icons";
+import { DESKTOP_ACCOUNTS, type DesktopEngine } from "./desktop-account";
 
 const pickers = new WeakMap<HTMLSelectElement, () => void>();
 let openPicker: { root: HTMLElement; close: (focus?: boolean) => void; reposition: () => void } | undefined;
@@ -11,6 +12,7 @@ export function enhanceProviderSelect(select: HTMLSelectElement, providers: Prov
   ensureProviderIconStyles();
   ensurePickerStyles();
   select.dataset.providerTypes = JSON.stringify(Object.fromEntries(providers.map(({ id, type }) => [id, type])));
+  select.dataset.providerEngines = JSON.stringify(Object.fromEntries(providers.filter(p => p.type === "chatgpt-desktop").map(p => [p.id, p.type === "chatgpt-desktop" ? p.engine ?? "codex" : "codex"])));
   const refresh = pickers.get(select);
   if (refresh) { refresh(); return; }
 
@@ -36,9 +38,10 @@ export function enhanceProviderSelect(select: HTMLSelectElement, providers: Prov
   const render = (): void => {
     close();
     const types = JSON.parse(select.dataset.providerTypes!) as Record<string, ProviderConfig["type"]>;
-    const markup = (option: HTMLOptionElement): string => providerIconMarkup(types[option.value] ? { type: types[option.value] } : undefined);
+    const engines = JSON.parse(select.dataset.providerEngines!) as Record<string, DesktopEngine>;
+    const markup = (option: HTMLOptionElement): string => providerIconMarkup(types[option.value] ? { type: types[option.value], engine: engines[option.value] } : undefined);
     const selected = select.selectedOptions[0];
-    const displayName = (option: HTMLOptionElement): string => types[option.value] === "chatgpt-desktop" ? "ChatGPT 帳號" : option.textContent ?? "";
+    const displayName = (option: HTMLOptionElement): string => types[option.value] === "chatgpt-desktop" ? DESKTOP_ACCOUNTS[engines[option.value] ?? "codex"].name : option.textContent ?? "";
     trigger.setAttribute("aria-label", `翻译服务：${selected?.textContent ?? "未选择"}`);
     trigger.title = selected?.textContent ?? "选择翻译服务";
     trigger.replaceChildren();
