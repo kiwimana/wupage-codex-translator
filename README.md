@@ -8,6 +8,20 @@
 
 [下載擴充與橋接](https://github.com/kiwimana/wupage-codex-translator/releases/latest) · [問題回報](https://github.com/kiwimana/wupage-codex-translator/issues)
 
+## 桌面帳號翻譯：不保留一般本機聊天紀錄
+
+**翻譯採用獨立的臨時工作，不續接原本的聊天室，也不把譯文保存為永久本機聊天紀錄。** 這裡所說的「沒有紀錄的聊天室」是由官方本機工具執行的臨時翻譯工作，不需要打開可見的聊天視窗；各服務的做法如下。
+
+| 本機工具 | 本機對話紀錄的處理 | 實作範圍 |
+| --- | --- | --- |
+| Codex／ChatGPT 帳號 | 每批使用 `codex exec --ephemeral`，不保存此次工作階段的對話檔案。 | 使用官方臨時執行模式，不續接既有對話。 |
+| Claude Code／Claude 帳號 | 每批使用 `--no-session-persistence`，不將此次對話保存到磁碟供日後續接。 | 停用本機對話保存，不續接既有對話。 |
+| Gemini CLI／Google 帳號 | 每批使用全新的獨立暫存目錄；正常完成、錯誤或取消時清理此次目錄。 | 執行期間仍可能有暫存對話檔，不能稱為「從不寫入紀錄」或官方無痕聊天室。強制終止或斷電可能留下暫存。 |
+
+Codex 與 Claude 的不保存模式，和 Gemini 的「暫存後清理」有差異；不將它們統稱為官方無痕聊天視窗。以上只說明本機翻譯工作，不承諾雲端服務零留存，也不刪除使用者原有聊天、設定或登入資料。擴充另停用永久本機譯文快取，避免長期累積翻譯內容。
+
+官方說明：[Codex 臨時執行](https://developers.openai.com/codex/noninteractive/)、[Claude 對話保存參數](https://code.claude.com/docs/en/cli-reference)、[Gemini 工作階段管理](https://geminicli.com/docs/cli/session-management/)。實作細節見[本機橋接說明](native-chatgpt/README.md)與[隱私說明](PRIVACY.md)。
+
 ## 功能
 
 - 網頁全文及段落翻譯，原文與譯文上下對照。
