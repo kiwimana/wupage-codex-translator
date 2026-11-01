@@ -24,7 +24,7 @@ with tempfile.TemporaryDirectory(prefix='wupage-public-install-') as temporary:
         config = json.loads((target / 'bridge.config.json').read_text(encoding='utf-8-sig'))
         manifest = json.loads((target / 'org.wupage.codex_bridge.json').read_text(encoding='utf-8-sig'))
         assert config == {'nodePath': node, 'codexPath': node}
-        assert Path(manifest['path']).parent == target
+        assert Path(manifest['path']).parent.resolve() == target.resolve()
         assert Path(manifest['path']).is_file()
         assert manifest['allowed_extensions'] == ['codex-translator@wupage.local']
         assert manifest['type'] == 'stdio'
