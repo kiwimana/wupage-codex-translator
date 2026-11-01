@@ -55,11 +55,12 @@ with tempfile.TemporaryDirectory(prefix='wupage-public-install-') as temporary:
                     except Exception:
                         process.kill()
                         raise
-                assert reply == {'ok': True, 'engine': 'codex', 'installed': True, 'login': 'unchecked', 'bridgeVersion': 2}
+                assert reply == {'ok': True, 'engine': 'codex', 'installed': True, 'login': 'unchecked', 'bridgeVersion': 2}, f'Unexpected native detection response: {reply!r}'
                 process.wait(timeout=10)
                 assert process.returncode == 0
             finally:
                 if process.poll() is None: process.kill()
+                process.wait(timeout=10)
                 process.stdin.close();process.stdout.close();process.stderr.close()
         manifests.append(manifest['path'])
     assert manifests[0] != manifests[1]
