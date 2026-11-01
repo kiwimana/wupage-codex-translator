@@ -24,10 +24,11 @@ async function setup(url = "https://www.youtube.com/watch?v=test", initiallyEnab
       return { ok: true, data: { opened: true, enabled, phase: enabled ? phase : "idle" } };
     }
     if (request.type === "GET_OCR_STATUS") return { ok: true, data: { state: "missing", downloaded: 0, total: 0 } };
+    if (request.type === "GET_EXTENSION_UPDATE") return { ok: true, data: { available: false, autoCheck: true, autoInstall: false } };
     return { ok: true };
   });
   vi.stubGlobal("chrome", {
-    runtime: { id: "cc-test", openOptionsPage: vi.fn(), sendMessage },
+    runtime: { id: "cc-test", getManifest: () => ({ version: "1.0.0" }), openOptionsPage: vi.fn(), sendMessage },
     storage: { local: { get: async () => ({}) }, onChanged: { addListener: vi.fn(), removeListener: vi.fn() } },
     tabs: { query: async () => [{ id: 4, url }], sendMessage: async () => ({ ok: true, data: { enabled: false, translated: false } }) }
   });

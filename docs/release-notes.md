@@ -1,4 +1,6 @@
-v1.9.0 新增擴充更新功能，並修正 YouTube CC 字幕重複出現多個 AI 按鈕。
+v1.9.1 新增擴充更新功能，並修正 YouTube CC 字幕重複出現多個 AI 按鈕。
+
+修正 Windows 8.3 縮短路徑被誤判為符號連結的相容性問題；仍拒絕實際符號連結及 junction。
 
 - 小視窗底部顯示版本及新版提示；設定頁新增「擴充更新」。預設每 6 小時檢查 GitHub 穩定版，可關閉或立即檢查。
 - Chrome 可透過新版 Windows 橋接安裝更新。第一次以 `install.ps1 -Browser Chrome -ChromeExtensionPath "D:\WuPage\chrome"` 指定目前載入的擴充資料夾，再於設定開啟自動安裝；預設不覆寫。更新核對 SHA-256、擴充識別碼與版本，失敗保留或還原原檔，保留瀏覽器翻譯與模型設定。

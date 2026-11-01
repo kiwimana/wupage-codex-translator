@@ -34,8 +34,9 @@ describe("popup menu preferences", () => {
     applyPopupMenuLayout(document, { order, hidden: [] });
     expect([...document.querySelector('[data-popup-menu-grid]')!.children].map(node => (node as HTMLElement).dataset.popupMenuItem))
       .toEqual(order.filter(id => !isPopupMenuLink(id)));
-    expect([...document.querySelector('[data-popup-menu-footer]')!.children].map(node => (node as HTMLElement).dataset.popupMenuItem))
+    expect([...document.querySelector('[data-popup-menu-footer]')!.children].map(node => (node as HTMLElement).dataset.popupMenuItem).filter(Boolean))
       .toEqual(["openGithub", "openWebsite"]);
+    expect(document.querySelector('[data-popup-menu-footer] #extensionUpdateSummary')).not.toBeNull();
     expect(document.querySelector("#contextMenuTranslation")).toBe(button);
     expect(document.querySelector("#ocrModelAction")).toBe(helper);
     expect(button.getAttribute("aria-pressed")).toBe("true");

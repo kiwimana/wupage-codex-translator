@@ -59,10 +59,17 @@ async function download(url, limit, signal, fetcher) {
 async function configuredDirectory(directory) {
   const config = JSON.parse((await fs.readFile(path.join(directory, 'bridge.config.json'), 'utf8')).replace(/^\uFEFF/, ''));
   if (!config.chromeExtensionPath) return undefined;
-  const target = config.chromeExtensionPath;
+  let target = config.chromeExtensionPath;
   if (!path.isAbsolute(target) || path.parse(target).root === target || target === directory || path.dirname(target) === target) throw new Error('Chrome 更新資料夾無效。');
   const stat = await fs.lstat(target);
-  if (!stat.isDirectory() || stat.isSymbolicLink() || path.resolve(target).toLowerCase() !== (await fs.realpath(target)).toLowerCase()) throw new Error('Chrome 更新資料夾不得使用符號連結。');
+  if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error('Chrome 更新資料夾不得使用符號連結。');
+  // Windows 8.3 names (e.g. a temporary directory) also differ from realpath;
+  // they are valid paths. Check actual link attributes along the ancestry.
+  for (let ancestor = path.resolve(target);;) {
+    if ((await fs.lstat(ancestor)).isSymbolicLink()) throw new Error('Chrome 更新資料夾不得使用符號連結。');
+    const parent = path.dirname(ancestor); if (parent === ancestor) break; ancestor = parent;
+  }
+  target = await fs.realpath(target);
   for (const name of ['.git','bridge.config.json','install.ps1','node_modules']) {
     try { await fs.access(path.join(target, name)); } catch { continue; }
     throw new Error('請指定獨立的 Chrome 擴充資料夾。');

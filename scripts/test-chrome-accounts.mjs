@@ -70,7 +70,7 @@ try{
  await send('Target.closeTarget',{targetId:popupTarget.targetId});
  assert.equal(await api(`return (await chrome.runtime.sendMessage({type:'GET_SETTINGS'})).data.providers.find(p=>p.id==='claude-desktop').model;`),'sonnet');
  check('actual Chrome toolbar popup saves the model and shows all controls without clipping');
- const updateVersion='1.9.1';
+ const updateParts=manifest.version.split('.').map(Number);updateParts[2]=(updateParts[2]??0)+1;const updateVersion=updateParts.join('.');
  await evaluate(workerSession,`globalThis.__originalUpdateFetch=globalThis.fetch;globalThis.fetch=(url,options)=>String(url)==='https://api.github.com/repos/kiwimana/wupage-codex-translator/releases/latest'?Promise.resolve(new Response(JSON.stringify({draft:false,prerelease:false,tag_name:'v${updateVersion}',assets:[{name:'wupage-codex-${updateVersion}-chrome.zip',size:100,browser_download_url:'https://github.com/kiwimana/wupage-codex-translator/releases/download/v${updateVersion}/wupage-codex-${updateVersion}-chrome.zip'}]}))):globalThis.__originalUpdateFetch(url,options);true`);
  await evaluate(options.session,`document.querySelector('a[href="#extensionUpdates"]').click();true`);
  await waitFor(()=>evaluate(options.session,`!document.querySelector('#extensionUpdates').hidden&&!document.querySelector('[data-update-now]').disabled`));
@@ -100,9 +100,9 @@ try{
  assert.equal((await api(`return (await chrome.runtime.sendMessage({type:'GET_TRANSLATION_DEBUG'})).data;`)).tasks.length,0);
  if(process.platform==='win32'){
   const archive=path.join(profile,'update-fixture.zip');
-  const makeArchive=await runProcess('python',['-c',`from pathlib import Path\nimport zipfile,json,sys\nroot=Path(sys.argv[1])\nwith zipfile.ZipFile(sys.argv[2],'w',zipfile.ZIP_DEFLATED) as archive:\n for file in root.rglob('*'):\n  if file.is_file():\n   data=file.read_bytes()\n   if file.name=='manifest.json':\n    manifest=json.loads(data);manifest['version']='1.9.1';data=json.dumps(manifest).encode()\n   archive.writestr(file.relative_to(root).as_posix(),data)`,extensionCopy,archive]);assert.equal(makeArchive.code,0,makeArchive.stderr);
+  const makeArchive=await runProcess('python',['-c',`from pathlib import Path\nimport zipfile,json,sys\nroot=Path(sys.argv[1])\nwith zipfile.ZipFile(sys.argv[2],'w',zipfile.ZIP_DEFLATED) as archive:\n for file in root.rglob('*'):\n  if file.is_file():\n   data=file.read_bytes()\n   if file.name=='manifest.json':\n    manifest=json.loads(data);manifest['version']=sys.argv[3];data=json.dumps(manifest).encode()\n   archive.writestr(file.relative_to(root).as_posix(),data)`,extensionCopy,archive,updateVersion]);assert.equal(makeArchive.code,0,makeArchive.stderr);
   const bytes=await fs.readFile(archive);
-  await applyExtensionUpdate(extensionCopy,{version:'1.9.1',size:bytes.length},bytes,createHash('sha256').update(bytes).digest('hex'),async(file,destination,signal)=>{
+  await applyExtensionUpdate(extensionCopy,{version:updateVersion,size:bytes.length},bytes,createHash('sha256').update(bytes).digest('hex'),async(file,destination,signal)=>{
    const extracted=await runProcess('powershell.exe',['-NoProfile','-ExecutionPolicy','Bypass','-File',path.join(root,'native-chatgpt/extract-update.ps1'),'-Archive',file,'-Destination',destination],{signal});assert.equal(extracted.code,0,extracted.stderr);
   });
   await evaluate(workerSession,'chrome.runtime.reload();true').catch(error=>{if(!/closed|detached|context|target/i.test(String(error)))throw error;});
@@ -110,9 +110,9 @@ try{
   const reopened=await page(base+'options.html');await delay(500);
   report.reloadState=await evaluate(reopened.session,`({version:globalThis.chrome?.runtime?.getManifest().version,provider:document.querySelector('#providerForm')?.dataset.providerId})`);
   await waitFor(()=>evaluate(reopened.session,`!!document.querySelector('#providerForm')?.dataset.providerId`));
-  assert.equal(await evaluate(reopened.session,`chrome.runtime.getManifest().version`),'1.9.1');
+  assert.equal(await evaluate(reopened.session,`chrome.runtime.getManifest().version`),updateVersion);
   const retained=await evaluate(reopened.session,`(async()=>{const r=await chrome.runtime.sendMessage({type:'GET_SETTINGS'});return r.data.providers.find(p=>p.id==='claude-desktop').model;})()`);assert.equal(retained,'sonnet');
-  report.installedFixtureVersion='1.9.1';check('real staged update of a loaded Chrome extension reloads the new version and retains model settings');
+  report.installedFixtureVersion=updateVersion;check('real staged update of a loaded Chrome extension reloads the new version and retains model settings');
  }
  report.nativeCalls=0;report.translationRequests=0;report.loginActions=0;report.passed=true;console.log(JSON.stringify(report));
 }catch(error){report.error=String(error);throw error;}
