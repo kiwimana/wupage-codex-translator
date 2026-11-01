@@ -17,7 +17,7 @@ import { doubaoProviderNotice, isDoubaoProviderUnavailable, syncDoubaoTargetCont
 import { renderUiIcons, uiIconMarkup } from "../shared/ui-icons";
 import { createSettingsSnapshot } from "../shared/settings-snapshot";
 import { observeParagraphMode } from "../shared/paragraph-mode";
-import { normalizeVideoTranslation } from "../shared/video";
+import { normalizeVideoTranslation, type VideoSubtitleState, type SubtitlePhase } from "../shared/video";
 import { normalizeAppearance } from "../shared/appearance";
 import { applyPopupMenuLayout } from "../shared/popup-menu";
 import { paragraphClickHint } from "../shared/local-shortcuts";
@@ -67,6 +67,8 @@ let activePageURL: string | undefined;
 let activeTabId: number | undefined;
 let ccEnabled = false;
 let ccActionVersion = 0;
+let ccRequestPending = false;
+let ccPhase: SubtitlePhase = "idle";
 let pageTranslationAvailable = true;
 let settingsReady = false;
 let settingsSave: Promise<unknown> = Promise.resolve();
@@ -729,25 +731,33 @@ function updateVideoTranslationButton(): void {
 }
 
 async function loadCcState(): Promise<void> {
-  if (activeTabId === undefined || translateCcButton.getAttribute("aria-busy") === "true") return;
+  if (activeTabId === undefined || ccRequestPending) return;
   const version = ccActionVersion;
   try {
-    const result = await sendRuntimeMessage<{ enabled: boolean }>({ type: "OPEN_VIDEO_SUBTITLES", tabId: activeTabId, action: "state" });
+    const result = await sendRuntimeMessage<VideoSubtitleState>({ type: "OPEN_VIDEO_SUBTITLES", tabId: activeTabId, action: "state" });
     if (version !== ccActionVersion) return;
     ccEnabled = result.enabled === true;
+    ccPhase = result.phase ?? (ccEnabled ? "active" : "idle");
     updateCcButton();
   } catch { /* A page can still be loading its content script. The action reports failures. */ }
 }
 
 function updateCcButton(): void {
+  const loading = ccRequestPending || (ccEnabled && ccPhase === "loading");
   translateCcButton.setAttribute("aria-pressed", String(ccEnabled));
-  translateCcButton.textContent = ccEnabled ? "停止 AI CC 字幕翻譯" : "AI 翻譯 CC 字幕";
+  translateCcButton.setAttribute("aria-busy", String(loading));
+  translateCcButton.textContent = loading ? (ccEnabled ? "AI 字幕翻譯中 · 停止" : "正在啟動 AI 字幕…")
+    : ccEnabled && ccPhase === "waiting" ? "等待 CC 字幕 · 停止"
+    : ccEnabled && ccPhase === "error" ? "字幕翻譯異常 · 停止"
+    : ccEnabled ? "停止 AI CC 字幕翻譯" : "AI 翻譯 CC 字幕";
 }
 
 async function toggleCcTranslation(): Promise<void> {
   if (activeTabId === undefined) return;
   ++ccActionVersion;
-  setButtonBusy(translateCcButton, true);
+  ccRequestPending = true;
+  translateCcButton.disabled = true;
+  updateCcButton();
   try {
     if (!ccEnabled) {
       await savePopupSettings();
@@ -755,14 +765,16 @@ async function toggleCcTranslation(): Promise<void> {
         ...normalizeVideoTranslation(latest.videoTranslation), enabled: true, showOriginal: true, enabledSites: []
       } }));
     }
-    const result = await sendRuntimeMessage<{ enabled: boolean }>({ type: "OPEN_VIDEO_SUBTITLES", tabId: activeTabId, action: ccEnabled ? "stop" : "start" });
+    const result = await sendRuntimeMessage<VideoSubtitleState>({ type: "OPEN_VIDEO_SUBTITLES", tabId: activeTabId, action: ccEnabled ? "stop" : "start" });
     ccEnabled = result.enabled === true;
+    ccPhase = result.phase ?? (ccEnabled ? "active" : "idle");
     setStatus(ccEnabled ? "AI 雙語字幕已啟動。字幕準備中可能暫停影片，完成後會繼續播放。" : "AI 字幕翻譯已停止，已恢復原字幕。");
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error));
   } finally {
+    ccRequestPending = false;
+    translateCcButton.disabled = false;
     updateCcButton();
-    setButtonBusy(translateCcButton, false);
   }
 }
 

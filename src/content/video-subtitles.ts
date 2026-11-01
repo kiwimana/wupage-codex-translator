@@ -1,7 +1,7 @@
 import { PlayerSubtitleController } from "./video-player";
 import { mediaKey, playerContainer, queryVideoRoots, videoPlatform } from "../video/platforms";
 import { sendRuntimeRequest } from "./runtime";
-import { normalizeVideoTranslation, videoPriority } from "../shared/video";
+import { normalizeVideoTranslation, videoPriority, type VideoSubtitleState, type SubtitlePhase } from "../shared/video";
 import { SETTINGS_KEY } from "../shared/defaults";
 import { createSettingsSnapshot } from "../shared/settings-snapshot";
 import type { ExtensionSettings } from "../shared/types";
@@ -43,15 +43,15 @@ export function initVideoSubtitles(): void {
   feature.ready = refresh().catch(() => {});
 }
 
-export async function openVideoSubtitles(action: "start" | "stop" | "state" = "start"): Promise<{ opened: boolean; enabled: boolean }> {
+export async function openVideoSubtitles(action: "start" | "stop" | "state" = "start"): Promise<VideoSubtitleState> {
   if (action === "start") {
     initVideoSubtitles(); await feature?.ready;
     if (CHATGPT_BUILD) await feature?.refresh();
     const opened = current?.open() ?? false;
-    return { opened, enabled: current?.enabled ?? false };
+    return { opened, enabled: current?.enabled ?? false, phase: current?.phase ?? "idle" };
   }
   if (action === "stop") current?.stop();
-  return { opened: !!current, enabled: current?.enabled ?? false };
+  return { opened: !!current, enabled: current?.enabled ?? false, phase: current?.phase ?? "idle" };
 }
 
 export class VideoSubtitleManager {
@@ -155,6 +155,7 @@ export class VideoSubtitleManager {
   }
 
   get enabled(): boolean { return [...this.players.values()].some(player => player.enabled); }
+  get phase(): SubtitlePhase { return this.primary()?.subtitlePhase ?? "idle"; }
 
   stop(): void {
     this.pageMediaKey = mediaKey(); this.resumePlayback = false;

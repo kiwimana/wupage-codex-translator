@@ -5,7 +5,7 @@ import { SETTINGS_KEY } from "../shared/defaults";
 import { TARGET_LANGUAGES } from "../shared/languages";
 import { createSettingsSnapshot } from "../shared/settings-snapshot";
 import type { ExtensionSettings } from "../shared/types";
-import { normalizeVideoTranslation, sameVideoLanguage, type VideoTranslationSettings } from "../shared/video";
+import { normalizeVideoTranslation, sameVideoLanguage, type VideoTranslationSettings, type SubtitlePhase } from "../shared/video";
 import { loadPageSubtitles, pageSubtitleCatalogue } from "../video/bridge-client";
 import { captionElements, mediaKey, renderedCaption, selectedNativeTrack, type VideoPlatform } from "../video/platforms";
 import type { PageSubtitleCatalogue } from "../video/site-cues";
@@ -27,7 +27,8 @@ export class PlayerSubtitleController {
   private timelineHasCues = false;
   private live?: LiveSubtitleTranslator;
   private requests?: VideoRequests;
-  private phase: "idle" | "loading" | "active" | "waiting" | "error" = "idle";
+  private phase: SubtitlePhase = "idle";
+  get subtitlePhase(): SubtitlePhase { return this.controlStartPending ? "loading" : this.phase; }
   private reportedError = "";
   private sourceError = "";
   private controller?: AbortController;

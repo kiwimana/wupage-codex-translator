@@ -18,6 +18,8 @@ describe("video frame routing and cancellation", () => {
     vi.mocked(chrome.tabs.sendMessage).mockImplementation(async (_tab, message) => ({ ok: true, data: { opened: true, enabled: (message as { action: string }).action === "state" } }));
     await expect(openVideoInTab(4, "state")).resolves.toEqual({ opened: true, enabled: true });
     await expect(openVideoInTab(4, "stop")).resolves.toEqual({ opened: true, enabled: false });
+    vi.mocked(chrome.tabs.sendMessage).mockImplementation(async () => ({ ok: true, data: { opened: true, enabled: true, phase: "loading" } }));
+    await expect(openVideoInTab(4, "state")).resolves.toEqual({ opened: true, enabled: true, phase: "loading" });
     expect(chrome.tabs.sendMessage).toHaveBeenCalledWith(4, { type: "OPEN_VIDEO_SUBTITLES", action: "stop" }, { frameId: 3 });
     expect(chrome.tabs.sendMessage).toHaveBeenCalledWith(4, { type: "OPEN_VIDEO_SUBTITLES", action: "stop" }, { frameId: 0 });
   });

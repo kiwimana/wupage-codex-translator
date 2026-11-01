@@ -1,7 +1,7 @@
 import type { RuntimeRequest } from "../shared/types";
 import { getSettings } from "../shared/settings";
 import { translateWithSettings } from "./translation";
-import { normalizeVideoTranslation, videoPriority } from "../shared/video";
+import { normalizeVideoTranslation, videoPriority, type SubtitlePhase } from "../shared/video";
 import { SETTINGS_KEY } from "../shared/defaults";
 import type { ExtensionSettings } from "../shared/types";
 
@@ -37,17 +37,19 @@ export async function openVideoInTab(tabId: number | undefined, action: "start" 
   const ids = [...new Set([...candidates.map(frame => frame.frame), 0])];
   let enabled = false;
   let opened = false;
+  let phase: SubtitlePhase | undefined;
   for (const frameId of ids) {
     try {
       const response = await chrome.tabs.sendMessage(tabId!, { type: "OPEN_VIDEO_SUBTITLES", ...(action !== "start" ? { action } : {}) }, { frameId });
       if (response?.ok) {
+        if (!enabled && response.data?.enabled === true) phase = response.data.phase;
         enabled ||= response.data?.enabled === true;
         opened ||= response.data?.opened === true;
         if (action === "start" && response.data?.opened) return response.data;
       }
     } catch { /* An embedded frame may have navigated since discovery. */ }
   }
-  if (action !== "start") return { opened, enabled };
+  if (action !== "start") return { opened, enabled, ...(phase ? { phase } : {}) };
   throw new Error("当前页面没有找到可播放的视频，请先打开视频后重试。");
 }
 

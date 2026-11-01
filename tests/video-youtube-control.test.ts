@@ -63,6 +63,23 @@ it('starts subtitles on HTTP pages where crypto.randomUUID is unavailable',async
   expect(vi.mocked(sendRuntimeRequest).mock.calls.some(([r])=>r.type==='TRANSLATE_VIDEO_SUBTITLES')).toBe(true);
   expect(player.view.root.querySelector('.translation span')!.textContent).toBe('日本語の字幕');
 });
+it('keeps loading visible through a delayed AI response, then clears it on completion and stop',async()=>{
+  let finish!:(value:unknown)=>void;
+  const original=vi.mocked(sendRuntimeRequest).getMockImplementation()!;
+  vi.mocked(sendRuntimeRequest).mockImplementation(request=>request.type==='TRANSLATE_VIDEO_SUBTITLES'?new Promise(resolve=>{finish=resolve;}):original(request));
+  button().click();
+  expect(button().getAttribute('aria-busy')).toBe('true');
+  await flush();
+  expect(player.subtitlePhase).toBe('loading');
+  expect(button().getAttribute('aria-busy')).toBe('true');
+  expect(player.view.root.querySelector('.toggle')!.getAttribute('aria-busy')).toBe('true');
+  finish({translations:['日本語の字幕'],cached:0});await flush();
+  expect(button().getAttribute('aria-busy')).toBe('false');
+  expect(player.view.root.querySelector('.toggle')!.getAttribute('aria-busy')).toBe('false');
+  button().click();await flush();
+  expect(player.subtitlePhase).toBe('idle');
+  expect(button().getAttribute('aria-busy')).toBe('false');
+});
 it('follows another CC language and a changed target language',async()=>{
   button().click();await flush();
   english.mode='hidden';french.mode='showing';await vi.advanceTimersByTimeAsync(240);await flush();

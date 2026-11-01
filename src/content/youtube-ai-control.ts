@@ -32,10 +32,11 @@ export class YouTubeAiControl {
       .wupage-ai-cc-button[aria-pressed="true"]::after {
         content: ""; position: absolute; bottom: 8%; left: 18%; right: 18%; height: 2px; border-radius: 2px; background: currentColor;
       }
-      .wupage-ai-cc-button[aria-busy="true"]::after { animation: wupage-ai-cc-pulse 1s ease-in-out infinite; }
+      .wupage-ai-cc-button[aria-busy="true"] > svg { visibility: hidden !important; }
+      .wupage-ai-cc-button[aria-busy="true"]::before { content: ""; position: absolute; left: calc(50% - 19px); top: calc(50% - 8px); box-sizing: border-box; width: 16px; height: 16px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: wupage-ai-cc-spin 780ms linear infinite; pointer-events: none; }
       .wupage-ai-cc-button:focus-visible { outline: 2px solid #d3bfff !important; outline-offset: -3px; }
-      @keyframes wupage-ai-cc-pulse { 50% { opacity: .3; } }
-      @media (prefers-reduced-motion: reduce) { .wupage-ai-cc-button::after { animation: none !important; } }
+      @keyframes wupage-ai-cc-spin { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) { .wupage-ai-cc-button::before { animation: none !important; } }
     `;
     player.append(this.style);
     this.observer = new MutationObserver(() => this.mount());
@@ -59,7 +60,7 @@ export class YouTubeAiControl {
 
   update(enabled: boolean, loading: boolean, target: string): void {
     const label = target || "設定的語言";
-    const title = enabled ? `停止 AI CC 字幕翻譯（目標：${label}）` : `AI 翻譯 CC 字幕為${label}`;
+    const title = loading ? `AI 正在翻譯 CC 字幕（目標：${label}），點擊可停止` : enabled ? `停止 AI CC 字幕翻譯（目標：${label}）` : `AI 翻譯 CC 字幕為${label}`;
     if (this.button.title !== title) { this.button.title = title; this.button.setAttribute("aria-label", title); }
     if (this.button.getAttribute("aria-pressed") !== String(enabled)) this.button.setAttribute("aria-pressed", String(enabled));
     if (this.button.getAttribute("aria-busy") !== String(loading)) this.button.setAttribute("aria-busy", String(loading));

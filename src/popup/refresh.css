@@ -46,6 +46,9 @@ button:focus-visible, select:focus-visible { outline: 2px solid var(--wp-accent)
 #translateCc { min-height: 40px; margin-top: 0; border: 1px solid var(--wp-border); border-radius: 11px; color: var(--wp-accent); background: var(--wp-selected); font-size: 12px; font-weight: 600; }
 #translateCc:hover:enabled { background: var(--wp-soft); }
 #translateCc[aria-pressed="true"] { color: var(--wp-on-accent); background: var(--wp-accent); }
+#translateCc[aria-busy="true"]::after { content: ""; display: inline-block; flex: 0 0 14px; width: 14px; height: 14px; box-sizing: border-box; margin-left: 8px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: popup-spin 780ms linear infinite; }
+#translateCc[aria-busy="true"]:disabled { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { #translateCc[aria-busy="true"]::after { animation: none; } }
 #status { padding: 10px 12px; border-radius: 10px; background: var(--wp-soft); line-height: 1.6; overflow-wrap: anywhere; font-size: 11px; }
 #status:empty { padding: 0; }
 .session-note { display: flex; justify-content: center; align-items: center; gap: 5px; margin: 0; color: var(--wp-muted); font-size: 10px; }

@@ -1,3 +1,10 @@
+export type SubtitlePhase = "idle" | "loading" | "active" | "waiting" | "error";
+export interface VideoSubtitleState {
+  opened: boolean;
+  enabled: boolean;
+  phase?: SubtitlePhase;
+}
+
 export interface VideoTranslationSettings {
   enabled: boolean;
   showOriginal: boolean;

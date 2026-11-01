@@ -9,7 +9,7 @@ export async function popupExecute(firefox, script, input = null) {
     if(!b){done(JSON.stringify({error:'Toolbar popup is closed'}));return;}const mm=b.messageManager;
     const timer=setTimeout(()=>{mm.removeMessageListener(arguments[1],listener);done(JSON.stringify({error:'Popup command timed out'}));},10000);
     const listener=m=>{clearTimeout(timer);mm.removeMessageListener(arguments[1],listener);done(m.data);};
-    mm.addMessageListener(arguments[1],listener);mm.loadFrameScript('data:application/javascript,'+encodeURIComponent(arguments[0]),false);`, [child, channel]);
+    mm.addMessageListener(arguments[1],listener);mm.loadFrameScript('data:application/javascript;charset=utf-8,'+encodeURIComponent(arguments[0]),false);`, [child, channel]);
   const result = JSON.parse(raw); if (result.error) throw new Error(result.error); return result.value;
 }
 export async function popupClick(firefox, selector) {

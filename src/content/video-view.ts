@@ -29,6 +29,9 @@ const styles = `
   .toolbar button { border: 0; color: inherit; background: transparent; min-height: 34px; padding: 7px 10px; font: 500 12px/20px system-ui,sans-serif; }
   .toolbar button:hover { background: #ffffff18; } .toggle { display: flex; gap: 7px; align-items: center; border-radius: 8px 0 0 8px; }
   .mark { display: grid; place-items: center; width: 20px; height: 18px; border: 1px solid #ffffffa8; border-radius: 4px; font-size: 12px; }
+  .toggle[aria-busy="true"] .mark { color: transparent; border: 2px solid #d3bfff; border-right-color: transparent; border-radius: 50%; width: 18px; height: 18px; animation: wupage-cc-spin 780ms linear infinite; }
+  @keyframes wupage-cc-spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .toggle[aria-busy="true"] .mark { animation: none; } }
   :host([data-enabled]) .mark { color: #1c1928; background: #c4adff; border-color: #c4adff; }
   .settings { display: grid; place-items: center; border-left: 1px solid #ffffff1c !important; border-radius: 0 8px 8px 0; } .settings svg { width: 15px; height: 15px; }
   button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid #c4adff; outline-offset: 2px; }
@@ -154,6 +157,7 @@ export class VideoView {
     this.host.toggleAttribute("data-enabled", enabled); this.host.toggleAttribute("data-error", phase === "error");
     this.host.toggleAttribute("data-waiting", enabled && phase === "waiting");
     this.toggle.setAttribute("aria-pressed", String(enabled));
+    this.toggle.setAttribute("aria-busy", String(enabled && phase === "loading"));
     this.toggle.title = enabled ? "停止字幕翻译" : "翻译视频字幕";
     this.setText(this.label, !enabled ? "字幕翻译" : phase === "loading" ? "读取字幕…" : phase === "error" ? "字幕需重试" : phase === "waiting" ? "等待原字幕" : "双语已开");
     this.setText(this.status, message); this.retry.hidden = !enabled || !["waiting", "error"].includes(phase);
