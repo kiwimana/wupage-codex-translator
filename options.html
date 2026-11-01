@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WuPage 设置</title>
+    <script type="module" src="/src/options/index.ts"></script>
+  </head>
+  <body>
+    <main class="settings">
+      <aside class="settings-sidebar">
+        <header class="settings-header">
+          <div class="settings-brand"><span data-wupage-icon="font" aria-hidden="true"></span><h1>WuPage</h1></div>
+          <p>打造你的雙語閱讀空間</p>
+        </header>
+        <nav class="settings-nav" aria-label="设置目录">
+          <a href="#generalSettings" aria-controls="generalSettings" aria-current="page">
+            <span data-wupage-icon="adjustment" aria-hidden="true"></span>
+            <span>通用</span>
+          </a>
+          <a href="#selectionTranslationSettings" aria-controls="selectionTranslationSettings">
+            <span data-wupage-icon="font" aria-hidden="true"></span>
+            <span>划词翻译</span>
+          </a>
+          <a href="#autoTranslationSettings" aria-controls="autoTranslationSettings">
+            <span data-wupage-icon="lightning" aria-hidden="true"></span>
+            <span>自动翻译</span>
+          </a>
+          <a href="#shortcutSettings" aria-controls="shortcutSettings">
+            <span data-wupage-icon="keyboard" aria-hidden="true"></span>
+            <span>快捷键</span>
+          </a>
+          <a href="#appearanceSettings" aria-controls="appearanceSettings">
+            <span data-wupage-icon="palette" aria-hidden="true"></span>
+            <span>外观</span>
+          </a>
+          <a href="#providerSettings" aria-controls="providerSettings">
+            <span data-wupage-icon="internet" aria-hidden="true"></span>
+            <span>翻译服务</span>
+          </a>
+          <a href="#performanceSettings" aria-controls="performanceSettings">
+            <span data-wupage-icon="microchip" aria-hidden="true"></span>
+            <span>性能设置</span>
+          </a>
+        </nav>
+      </aside>
+
+      <div class="settings-workspace">
+        <div class="settings-content">
+          <section id="generalSettings" class="settings-panel" aria-labelledby="generalSettingsTitle">
+            <div class="settings-panel-heading">
+              <h2 id="generalSettingsTitle">通用</h2>
+              <p>设置翻译语言、译文样式和常用功能。</p>
+            </div>
+            <div class="language-field">
+              <span class="field-label">翻译语言</span>
+              <div class="language-pair">
+                <label class="language-select">
+                  <span class="visually-hidden">源语言</span>
+                  <select id="sourceLang"></select>
+                  <span class="language-chevron" data-wupage-icon="arrow-down-03" aria-hidden="true"></span>
+                </label>
+                <span class="language-direction" aria-hidden="true" data-wupage-icon="arrow-right"></span>
+                <label class="language-select">
+                  <span class="visually-hidden">目标语言</span>
+                  <select id="targetLang"></select>
+                  <span class="language-chevron" data-wupage-icon="arrow-down-03" aria-hidden="true"></span>
+                </label>
+              </div>
+            </div>
+            <div class="grid">
+              <label class="display-mode-field">译文显示模式
+                <select id="translationDisplayMode"></select>
+                <span id="translationDisplayModeDescription" class="field-description"></span>
+              </label>
+            </div>
+            <div class="general-toggles">
+              <div class="image-feature" data-loading aria-busy="true">
+                <div class="image-feature-row">
+                  <label id="imageTranslationLabel" for="imageTranslationEnabled" class="image-feature-label" title="点击图片旁按钮，覆盖原文">图片翻译</label>
+                  <div class="ocr-help-slot"></div>
+                  <button id="ocrModelAction" type="button" class="ocr-model-action" aria-label="安装 OCR 模型" disabled></button>
+                  <label class="setting-toggle">
+                    <input id="imageTranslationEnabled" type="checkbox" role="switch" disabled aria-labelledby="imageTranslationLabel" aria-describedby="ocrDescription ocrModelStatus" />
+                    <span class="setting-toggle-control" aria-hidden="true"></span>
+                  </label>
+                </div>
+                <p id="ocrDescription" class="ocr-description"></p>
+                <progress id="ocrModelProgress" class="ocr-model-progress" aria-label="OCR 模型下载进度" hidden></progress>
+                <p id="ocrModelStatus" class="ocr-model-status" role="status"></p>
+              </div>
+              <label class="setting-toggle">
+                <span>启用本地缓存</span>
+                <input id="cacheEnabled" type="checkbox" role="switch" />
+                <span class="setting-toggle-control" aria-hidden="true"></span>
+              </label>
+              <label class="setting-toggle">
+                <span>显示悬浮球</span>
+                <input id="floatingBallEnabled" type="checkbox" role="switch" />
+                <span class="setting-toggle-control" aria-hidden="true"></span>
+              </label>
+              <label class="setting-toggle">
+                <span>翻译代码注释</span>
+                <input id="translateCodeComments" type="checkbox" role="switch" />
+                <span class="setting-toggle-control" aria-hidden="true"></span>
+              </label>
+              <label class="setting-toggle">
+                <span>全文翻译包含嵌入内容</span>
+                <input id="frameTranslationEnabled" type="checkbox" role="switch" />
+                <span class="setting-toggle-control" aria-hidden="true"></span>
+              </label>
+            </div>
+            <label>嵌入内容排除规则
+              <textarea id="frameTranslationExcluded" rows="3" spellcheck="false" placeholder="https://example.com/widget/*"></textarea>
+              <span class="field-description">每行一个网址规则，* 匹配任意字符。也可写「所在网页规则 =&gt; 嵌入网址规则」，仅排除指定网页中的嵌入内容。</span>
+            </label>
+          </section>
+
+          <section id="shortcutSettings" class="settings-panel" aria-labelledby="shortcutSettingsTitle" hidden>
+            <div class="settings-panel-heading shortcut-panel-heading">
+              <div>
+              <h2 id="shortcutSettingsTitle">快捷键</h2>
+              </div>
+              <button id="resetShortcuts" type="button" class="secondary">恢复默认</button>
+            </div>
+            <div class="shortcut-toolbar">
+              <p id="shortcutRecorderHelp" class="hint">点击按键框录入；Esc 取消，Delete 清空。修改后点击「保存」。</p>
+              <p id="shortcutStatus" class="hint" role="status" aria-live="polite"></p>
+            </div>
+            <dl id="shortcutBindings" class="shortcut-list" aria-label="翻译快捷键"></dl>
+            <h3>局部操作</h3>
+            <p class="field-description">段落点击可选择修饰键；其余点击按键框录入。悬浮球翻译与进入菜单可分别设置，仅在对应功能中生效。</p>
+            <dl id="localShortcutBindings" class="shortcut-list" aria-label="局部快捷操作"></dl>
+          </section>
+
+          <section id="selectionTranslationSettings" class="settings-panel" aria-labelledby="selectionTranslationSettingsTitle" hidden>
+            <div class="settings-panel-heading">
+              <h2 id="selectionTranslationSettingsTitle">划词翻译</h2>
+            </div>
+            <label class="setting-toggle">
+              <span>启用划词翻译</span>
+              <input id="selectionTranslationEnabled" type="checkbox" role="switch" aria-controls="selectionTranslationFields" />
+              <span class="setting-toggle-control" aria-hidden="true"></span>
+            </label>
+            <fieldset id="selectionTranslationFields" class="selection-translation-fields">
+              <div class="grid">
+                <label>默认词典
+                  <select id="selectionDictionary"><option value="youdao">有道词典</option><option value="bing">Bing 词典</option></select>
+                </label>
+                <label>划词入口样式
+                  <select id="selectionTriggerStyle"><option value="dot">小圆点</option><option value="underline">下划线</option></select>
+                </label>
+              </div>
+            </fieldset>
+          </section>
+
+          <section id="autoTranslationSettings" class="settings-panel" aria-labelledby="autoTranslationSettingsTitle" hidden>
+            <div class="settings-panel-heading">
+              <h2 id="autoTranslationSettingsTitle">自动翻译</h2>
+              <p>按页面语言或站点规则自动开启翻译。</p>
+            </div>
+            <div class="auto-translation-controls">
+              <div class="auto-translation-master-group">
+                <label id="autoTranslateLabel" for="autoTranslateEnabled">启用自动翻译</label>
+                <div id="autoTranslateHelp" class="auto-translation-help">
+                  <button id="autoTranslateHelpTrigger" type="button" class="auto-translation-help-trigger" aria-label="自动翻译说明" aria-describedby="autoTranslateHelpPanel"><span data-wupage-icon="question-mark" aria-hidden="true"></span></button>
+                  <div id="autoTranslateHelpPanel" class="auto-translation-help-panel" role="tooltip" hidden>启用后，满足以下任意一项规则的网页会使用当前语言、翻译服务和显示模式自动翻译，并消耗对应服务的额度。手动恢复原文后，当前地址不会再次自动开启。</div>
+                </div>
+                <label class="setting-toggle auto-translation-master">
+                  <input id="autoTranslateEnabled" type="checkbox" role="switch" aria-labelledby="autoTranslateLabel" aria-controls="autoTranslateNonTargetOption" />
+                  <span class="setting-toggle-control" aria-hidden="true"></span>
+                </label>
+              </div>
+              <label id="autoTranslateNonTargetOption" class="auto-language-option" title="在本机识别页面语言，无法可靠识别时跳过；取消勾选后仅按站点列表翻译。" hidden>
+                <input id="autoTranslateNonTarget" type="checkbox" />
+                <span>页面语言不是目标语言时自动翻译</span>
+              </label>
+            </div>
+            <fieldset class="performance-group">
+              <legend>自动翻译站点</legend>
+              <ul id="autoTranslateSites" class="auto-site-list" aria-label="自动翻译站点列表"></ul>
+              <div id="autoTranslateExcluded" class="auto-excluded" hidden>
+                <span class="field-label" title="这些域名不触发站点规则或非目标语言自动翻译">已排除的网站</span>
+                <ul id="autoTranslateExcludedSites" class="auto-excluded-list" aria-label="已排除的自动翻译网站"></ul>
+              </div>
+              <p id="autoTranslateSiteHelp" class="hint">example.com 包含子域名，*.example.com 仅匹配子域名，https://example.com/docs/* 可限定协议和路径。</p>
+              <p id="autoTranslateSiteStatus" class="hint" role="status"></p>
+            </fieldset>
+          </section>
+
+          <section id="appearanceSettings" class="settings-panel" aria-labelledby="appearanceSettingsTitle" hidden>
+            <div class="settings-panel-heading">
+              <h2 id="appearanceSettingsTitle">外观</h2>
+              <p>选择明暗配色，调整弹窗中的常用功能。</p>
+            </div>
+            <div class="appearance-tabs" role="tablist" aria-label="外观设置">
+              <button id="appearanceColorsTab" type="button" role="tab" data-appearance-tab="colors" aria-selected="true" aria-controls="appearanceColorsPanel">配色与外观</button>
+              <button id="appearanceMenuTab" type="button" role="tab" data-appearance-tab="menu" aria-selected="false" aria-controls="appearanceMenuPanel" tabindex="-1">菜单功能</button>
+            </div>
+            <div id="appearanceColorsPanel" data-appearance-panel="colors" role="tabpanel" aria-labelledby="appearanceColorsTab">
+            <fieldset class="appearance-mode-field">
+              <legend>界面模式</legend>
+              <div class="appearance-modes">
+                <label><input type="radio" name="appearanceMode" value="system" checked /><span data-wupage-icon="display" aria-hidden="true"></span><span>跟随系统</span></label>
+                <label><input type="radio" name="appearanceMode" value="light" /><span data-wupage-icon="light-mode" aria-hidden="true"></span><span>浅色</span></label>
+                <label><input type="radio" name="appearanceMode" value="dark" /><span data-wupage-icon="dark-mode" aria-hidden="true"></span><span>深色</span></label>
+              </div>
+            </fieldset>
+            <div class="appearance-layout">
+              <div class="appearance-editor">
+                <div class="appearance-section-heading">
+                  <h3>配色方案</h3>
+                  <div class="appearance-tone-switch" role="group" aria-label="编辑配色类型">
+                    <button type="button" data-appearance-tone="light" aria-pressed="true">浅色配色</button>
+                    <button type="button" data-appearance-tone="dark" aria-pressed="false">深色配色</button>
+                  </div>
+                </div>
+                <div class="appearance-scheme-toolbar">
+                  <label class="visually-hidden" for="appearanceScheme">配色方案</label>
+                  <select id="appearanceScheme"></select>
+                  <button id="duplicateScheme" type="button" class="secondary">复制方案</button>
+                </div>
+                <fieldset class="appearance-colors">
+                  <legend>颜色</legend>
+                  <div id="appearanceColors" class="appearance-color-groups"></div>
+                </fieldset>
+                <div id="customSchemeActions" class="appearance-custom-actions" hidden>
+                  <label for="appearanceSchemeName">方案名称</label>
+                  <input id="appearanceSchemeName" type="text" maxlength="60" />
+                  <div class="appearance-scheme-actions">
+                    <button id="resetSchemeColors" type="button" class="secondary">重置颜色</button>
+                    <button id="deleteScheme" type="button" class="appearance-delete secondary">删除方案</button>
+                  </div>
+                </div>
+                <p id="appearanceStatus" class="field-description" role="status" aria-live="polite"></p>
+              </div>
+              <aside class="appearance-preview-area" aria-labelledby="appearancePreviewTitle">
+                <div class="appearance-section-heading"><h3 id="appearancePreviewTitle">效果预览</h3><span id="appearancePreviewTone" class="field-description">浅色</span></div>
+                <div id="appearancePreview" class="appearance-preview">
+                  <div class="appearance-preview-toolbar"><span class="appearance-preview-brand">W<span>WuPage</span></span><span class="appearance-preview-chip">英<span data-wupage-icon="arrow-right" aria-hidden="true"></span>中</span></div>
+                  <div class="appearance-preview-bilingual">
+                    <div class="appearance-preview-page appearance-preview-page-light"><span>浅色网页 · 双色对照</span><p>Discover something wonderful.</p><p class="appearance-preview-translation-light">发现生活中的美好。</p></div>
+                    <div class="appearance-preview-page appearance-preview-page-dark"><span>深色网页 · 双色对照</span><p>Discover something wonderful.</p><p class="appearance-preview-translation-dark">发现生活中的美好。</p></div>
+                  </div>
+                  <div class="appearance-preview-paragraph">段落翻译高亮 <span class="appearance-preview-selection-trigger" title="划词入口"></span><span class="appearance-preview-image-button" title="图片翻译入口">译图</span></div>
+                  <div class="appearance-preview-card">
+                    <span class="appearance-preview-eyebrow">划词翻译</span>
+                    <strong class="appearance-preview-word">serendipity</strong>
+                    <span class="appearance-preview-phonetic">/ˌser.ənˈdɪp.ə.ti/</span>
+                    <p><i>n.</i> 不期而遇的美好；意外发现的珍宝</p>
+                    <div class="appearance-preview-divider"></div>
+                    <p class="appearance-preview-muted">在日常阅读中，遇见新的可能。</p>
+                    <div class="appearance-preview-button">翻译全文 <span data-wupage-icon="arrow-right" aria-hidden="true"></span></div>
+                  </div>
+                  <div class="appearance-preview-feedback"><span><span data-wupage-icon="tick" aria-hidden="true"></span>已完成翻译</span><span><span data-wupage-icon="cross" aria-hidden="true"></span>请求失败，请重试</span></div>
+                  <span class="appearance-preview-ball" title="悬停预览悬浮球颜色">译</span>
+                </div>
+                <p class="field-description">预览当前编辑的配色，悬停「译」可查看悬浮球悬停色。保存后同步更新界面、控件和已有双色译文。</p>
+              </aside>
+            </div>
+            </div>
+            <div id="appearanceMenuPanel" data-appearance-panel="menu" role="tabpanel" aria-labelledby="appearanceMenuTab" hidden>
+              <div id="popupMenuEditor">
+                <div class="appearance-section-heading">
+                  <h3>弹窗菜单</h3>
+                  <button id="resetPopupMenu" type="button" class="secondary">恢复默认布局</button>
+                </div>
+                <p class="field-description menu-layout-description">把常用功能放进菜单，排成顺手的样子。</p>
+                <div class="menu-layout-columns">
+                  <aside class="menu-layout-preview-area" aria-labelledby="popupMenuPreviewTitle">
+                    <div class="menu-layout-column-heading"><h3 id="popupMenuPreviewTitle">我的菜单 <span id="popupMenuSelectedCount" class="menu-layout-count"></span></h3><span>拖动排序 · 点击移除</span></div>
+                    <div id="popupMenuPreview" class="menu-layout-preview">
+                      <div class="menu-layout-preview-header"><strong>WuPage</strong><span data-wupage-icon="settings" aria-hidden="true"></span></div>
+                      <div class="menu-layout-preview-language">
+                        <span class="menu-layout-preview-select">自动检测<span data-wupage-icon="arrow-down-03" aria-hidden="true"></span></span>
+                        <span class="menu-layout-preview-direction" data-wupage-icon="arrow-right" aria-hidden="true"></span>
+                        <span class="menu-layout-preview-select">中文<span data-wupage-icon="arrow-down-03" aria-hidden="true"></span></span>
+                        <span class="menu-layout-preview-auto">自动</span>
+                      </div>
+                      <div class="menu-layout-preview-label">翻译服务<div class="menu-layout-preview-field">翻译服务<span data-wupage-icon="arrow-down-03" aria-hidden="true"></span></div></div>
+                      <div class="menu-layout-preview-label">翻译模式<div class="menu-layout-preview-field">原色对照<span data-wupage-icon="arrow-down-03" aria-hidden="true"></span></div></div>
+                      <div data-popup-menu-grid class="menu-layout-preview-grid" aria-describedby="popupMenuKeyboardHint"></div>
+                      <p id="popupMenuPreviewEmpty" class="menu-preview-empty" hidden>从右侧添加常用功能</p>
+                      <div data-popup-menu-footer class="menu-layout-preview-footer" aria-label="固定底部链接"></div>
+                    </div>
+                    <p id="popupMenuKeyboardHint" class="field-description menu-layout-hint">拖到按钮旁可并排，拖到行间可独占一行。也可按 Alt + 方向键排序；GitHub 和官网固定在底部。</p>
+                  </aside>
+                  <div class="menu-layout-library" aria-labelledby="popupMenuLibraryTitle">
+                    <div class="menu-layout-column-heading"><h3 id="popupMenuLibraryTitle">可添加功能 <span id="popupMenuAvailableCount" class="menu-layout-count"></span></h3><span>点击添加</span></div>
+                    <div id="popupMenuItems" class="menu-layout-groups"></div>
+                    <div id="popupMenuLibraryEmpty" class="menu-library-empty" hidden><span class="menu-library-empty-icon" data-wupage-icon="tick" aria-hidden="true"></span><strong>所有功能都在菜单里了</strong><p>点击左侧暂时用不到的按钮，<br>它会回到这里，随时可以再添加。</p></div>
+                    <p class="field-description menu-layout-library-note">移除入口会保留功能的当前开关状态。语言、翻译服务、翻译模式与设置入口始终显示。</p>
+                  </div>
+                </div>
+                <p id="popupMenuStatus" class="field-description" role="status" aria-live="polite"></p>
+              </div>
+            </div>
+          </section>
+
+          <section id="providerSettings" class="settings-panel" aria-labelledby="providerSettingsTitle" hidden>
+            <div class="settings-panel-heading">
+              <h2 id="providerSettingsTitle">翻译服务</h2>
+            </div>
+            <div class="provider-field">
+              <span class="field-label">当前服务</span>
+              <div class="provider-toolbar">
+                <div id="providerPicker" class="provider-picker">
+                  <button id="providerTrigger" class="provider-trigger" type="button" aria-haspopup="listbox" aria-expanded="false">
+                    <span id="providerTriggerIcon" aria-hidden="true"></span>
+                    <span id="providerTriggerLabel" class="provider-trigger-label"></span>
+                    <span class="provider-chevron" data-wupage-icon="arrow-down-03" aria-hidden="true"></span>
+                  </button>
+                  <div id="providerMenu" class="provider-menu" role="listbox" hidden></div>
+                </div>
+                <button id="addProvider" class="icon-button add-provider" type="button" title="添加自定义供应商" aria-label="添加自定义供应商"><span data-wupage-icon="plus" aria-hidden="true"></span></button>
+              </div>
+            </div>
+            <p id="disabledProviderHint" class="hint" role="status" hidden>此服务已停用，仍可编辑、保存和测试配置。启用后才会出现在翻译服务列表中。</p>
+            <div id="providerForm"></div>
+          </section>
+
+          <section id="performanceSettings" class="settings-panel" aria-labelledby="performanceSettingsTitle" hidden>
+            <div class="settings-panel-heading">
+              <h2 id="performanceSettingsTitle">性能设置</h2>
+            </div>
+            <fieldset class="performance-group">
+              <legend>通用性能</legend>
+              <div class="grid">
+                <label>默认分块大小 <input id="chunkSize" type="number" min="200" max="4000" /></label>
+                <label>全局最大并发数 <input id="concurrency" type="number" min="1" max="8" /></label>
+              </div>
+            </fieldset>
+            <div id="providerPerformance"></div>
+            <fieldset id="pdfSettings" class="performance-group">
+              <legend>PDF 翻译范围</legend>
+              <div class="grid">
+                <label>翻译范围
+                  <select id="pdfTranslationScope">
+                    <option value="nearby">附近页面</option>
+                    <option value="unlimited">无限制（整份 PDF）</option>
+                  </select>
+                </label>
+                <label id="pdfTranslationPageRadiusField">前后各翻译页数
+                  <input id="pdfTranslationPageRadius" type="number" min="0" max="1000" step="1" />
+                </label>
+              </div>
+            </fieldset>
+          </section>
+        </div>
+
+        <footer class="settings-actions">
+          <button id="save" type="button">保存</button>
+          <button id="restore" type="button" class="secondary">恢复默认设置</button>
+          <p id="status" role="status"></p>
+        </footer>
+      </div>
+    </main>
+
+    <dialog id="providerDialog" class="provider-dialog">
+      <form id="providerDialogForm">
+        <header class="dialog-header">
+          <h2>添加自定义供应商</h2>
+          <button id="cancelProvider" class="dialog-close" type="button" title="关闭" aria-label="关闭"><span data-wupage-icon="cross" aria-hidden="true"></span></button>
+        </header>
+        <label>显示名称 <input id="customProviderName" type="text" placeholder="例如：公司翻译服务" /></label>
+        <label>供应商类型
+          <select id="customProviderKind">
+            <option value="http">HTTP</option>
+            <option value="llm">LLM</option>
+          </select>
+        </label>
+        <label id="customLlmFormatField" hidden>LLM 接口格式
+          <select id="customLlmFormat">
+            <option value="openai">OpenAI 兼容</option>
+            <option value="anthropic">Anthropic 兼容</option>
+          </select>
+        </label>
+        <div class="dialog-actions">
+          <button type="submit">添加</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="modelDialog" class="provider-dialog">
+      <form id="modelDialogForm">
+        <header class="dialog-header">
+          <h2>管理模型</h2>
+          <button id="cancelModel" class="dialog-close" type="button" aria-label="关闭"><span data-wupage-icon="cross" aria-hidden="true"></span></button>
+        </header>
+        <label>操作
+          <select id="modelAction">
+            <option value="add">添加模型</option>
+            <option value="edit">修改当前模型</option>
+          </select>
+        </label>
+        <label>模型名称 <input id="customModelName" type="text" required placeholder="填写服务商提供的模型名称" /></label>
+        <p class="hint">添加后会选中该模型；当前服务的地址和密钥会保留。</p>
+        <p id="modelStatus" class="hint" role="status"></p>
+        <div class="dialog-actions"><button type="submit">保存并使用</button></div>
+      </form>
+    </dialog>
+  </body>
+</html>

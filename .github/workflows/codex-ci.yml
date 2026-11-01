@@ -1,0 +1,47 @@
+name: Check public Firefox Codex build
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - run: npm ci
+      - run: npm run check:public
+      - run: npm run typecheck
+      - run: npm test -- --maxWorkers=2
+      - run: npm run test:native
+      - run: python -B -m unittest discover -s tests -p 'test_public_package.py'
+      - run: npm run build:firefox:codex
+      - run: npm run package:codex
+      - uses: actions/upload-artifact@v4
+        with:
+          name: public-firefox-codex-packages
+          path: artifacts/*
+  native-install:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - run: python scripts/test-native-install.py
