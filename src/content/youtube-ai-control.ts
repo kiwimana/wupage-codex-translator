@@ -6,6 +6,9 @@ export class YouTubeAiControl {
   private readonly style = document.createElement("style");
   private readonly observer: MutationObserver;
   private disposed = false;
+  private controls?: HTMLElement;
+  private settingsButton?: Element;
+  private nativeAttached?: boolean;
   // A DOM event also reaches an older copy of the module after reinjection.
   private readonly superseded = () => this.dispose();
 
@@ -16,6 +19,7 @@ export class YouTubeAiControl {
     this.button.type = "button";
     this.button.className = "ytp-button wupage-ai-cc-button";
     this.button.setAttribute("data-wupage-video-control", "");
+    this.button.setAttribute("data-wupage-ai-managed", "");
     this.button.innerHTML = `${uiIconMarkup("microchip")}<span aria-hidden="true">AI</span>`;
     this.button.addEventListener("click", event => { event.preventDefault(); event.stopPropagation(); toggle(); });
     this.button.addEventListener("keydown", event => {
@@ -34,6 +38,7 @@ export class YouTubeAiControl {
       .wupage-ai-cc-button > svg { position: static !important; width: 19px !important; height: 19px !important; box-sizing: border-box !important; padding: 0 !important; border: 0 !important; margin: 0 !important; transform: none !important; flex: 0 0 19px !important; fill: currentColor !important; }
       .wupage-ai-cc-button > span { position: static !important; display: inline-block !important; width: auto !important; height: auto !important; margin: 0 !important; padding: 0 !important; transform: none !important; color: inherit !important; font: inherit !important; white-space: nowrap !important; pointer-events: none; }
       .ytp-right-controls .wupage-ai-cc-button[aria-pressed="true"] { color: #d3bfff !important; }
+      .ytp-right-controls .wupage-ai-cc-button[data-wupage-ai-retired] { display: none !important; pointer-events: none !important; }
       .wupage-ai-cc-button[aria-pressed="true"]::after {
         content: ""; position: absolute; bottom: 8%; left: 18%; right: 18%; height: 2px; border-radius: 2px; background: currentColor;
       }
@@ -44,7 +49,13 @@ export class YouTubeAiControl {
       @media (prefers-reduced-motion: reduce) { .wupage-ai-cc-button::before { animation: none !important; } }
     `;
     player.append(this.style);
-    this.observer = new MutationObserver(() => this.mount());
+    this.observer = new MutationObserver(records => {
+      if (this.disposed) return;
+      if (!this.controls?.isConnected || this.button.parentElement !== (this.settingsButton?.parentElement ?? this.controls)
+        || this.style.parentElement !== this.player || records.some(record => this.controls!.contains(record.target)
+          && [...record.addedNodes, ...record.removedNodes].some(node => node instanceof Element
+            && (node.matches('.wupage-ai-cc-button,.ytp-settings-button') || !!node.querySelector('.wupage-ai-cc-button,.ytp-settings-button'))))) this.mount();
+    });
     this.observer.observe(player, { childList: true, subtree: true });
     this.update(false, false, "");
     this.mount();
@@ -53,16 +64,33 @@ export class YouTubeAiControl {
   private mount(): void {
     if (this.disposed) return;
     const controls = this.player.querySelector<HTMLElement>(".ytp-right-controls");
-    if (!controls) { this.attached(false); return; }
+    if (!controls) { this.setAttached(false); return; }
+    const replaced = controls !== this.controls;
+    this.controls = controls;
     // YouTube can clone an existing bar, including our button and its old state.
-    this.player.querySelectorAll(".wupage-ai-cc-button").forEach(button => { if (button !== this.button) button.remove(); });
+    this.player.querySelectorAll<HTMLButtonElement>(".wupage-ai-cc-button").forEach(button => {
+      if (button === this.button) return;
+      if (replaced || button.hasAttribute("data-wupage-ai-managed")) button.remove();
+      else {
+        // A pre-1.9 content script may still own this node after reload. Removing
+        // it repeatedly would make both MutationObservers reinsert forever.
+        button.setAttribute("data-wupage-ai-retired", "");
+        button.setAttribute("aria-hidden", "true"); button.disabled = true;
+      }
+    });
     const before = controls.querySelector(".ytp-settings-button");
+    this.settingsButton = before ?? undefined;
     const parent = before?.parentElement ?? controls;
-    if (this.button.parentElement !== parent || (before && this.button.nextElementSibling !== before)) {
+    if (this.button.parentElement !== parent || (before && !(this.button.compareDocumentPosition(before) & Node.DOCUMENT_POSITION_FOLLOWING))) {
       parent.insertBefore(this.button, before);
     }
     if (!this.style.isConnected) this.player.append(this.style);
-    this.attached(true);
+    this.setAttached(true);
+  }
+
+  private setAttached(value: boolean): void {
+    if (this.nativeAttached === value) return;
+    this.nativeAttached = value; this.attached(value);
   }
 
   update(enabled: boolean, loading: boolean, target: string): void {
@@ -76,6 +104,6 @@ export class YouTubeAiControl {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true; this.observer.disconnect(); this.player.removeEventListener("wupage-ai-cc-takeover", this.superseded);
-    this.button.remove(); this.style.remove(); this.attached(false);
+    this.button.remove(); this.style.remove(); this.setAttached(false);
   }
 }

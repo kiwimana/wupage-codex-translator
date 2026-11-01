@@ -14,6 +14,8 @@ Chrome 模式是 `chrome-chatgpt`，輸出 `dist-chrome-chatgpt/`；保留 modul
 
 `tests/video-youtube-control.test.ts` 與隔離 Chrome 測試涵蓋重複注入、控制列含按鈕的複製、多個影片共用播放器與切換影片；每個 YouTube 播放器只有一個按鈕管理者。
 
+`scripts/test-youtube-idle-firefox.mjs` 使用隔離 Firefox 與本機播放器頁，模擬舊版按鈕監測仍在分頁時的衝突，確認修正後不會無限移除、插入按鈕，並在字幕持續變動時保持單一可見按鈕、沒有翻譯工作。可用 `YOUTUBE_IDLE_BASELINE` 指向舊版解壓資料夾做比較；舊監測在 60 次修復時中止，避免測試本身無限迴圈。這不是實際 YouTube 網路播放或整體 CPU／掉幀的量測。
+
 實際 Firefox 測試使用獨立瀏覽器設定檔。可設定 `FIREFOX_BINARY`，執行 `scripts/test-popup-firefox.mjs`、`scripts/test-floating-firefox.mjs`、`scripts/test-shorts-layout-firefox.mjs` 與 `scripts/test-ui-refresh-firefox.mjs`。UI 檢查使用本機測試頁或模擬翻譯服務；`test-chatgpt-*`、`test-cc-firefox.mjs` 及 `test-youtube-control-firefox.mjs` 可能使用執行者自己的 ChatGPT 額度。
 
 安裝程式解析執行者電腦上的 Node.js 與 Codex／Gemini CLI／Claude Code、編譯啟動器並註冊目前使用者的原生主機。`bridge.config.json` 與主機 JSON 只存於本機；主機不開 HTTP 伺服器。`detect` 只檢查安裝檔；`connect` 必須從設定頁明確點擊才開啟登入，不自動驗證帳號。模型是經驗證的獨立參數；來源文字只經 stdin 傳送。其他開發說明見 [development.md](development.md)。

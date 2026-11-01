@@ -128,6 +128,26 @@ it('supersedes an earlier control without observers fighting over the same playe
   player.dispose(); expect(document.querySelectorAll('.wupage-ai-cc-button')).toHaveLength(1);
   replacement.dispose(); expect(document.querySelectorAll('.wupage-ai-cc-button')).toHaveLength(0);
 });
+it('does not fight a legacy observer left in a tab after an extension update', async()=>{
+  player.dispose();
+  const container=video.parentElement!, controls=container.querySelector('.ytp-right-controls')!, gear=controls.querySelector('.ytp-settings-button')!;
+  const legacy=document.createElement('button');legacy.className='wupage-ai-cc-button';controls.insertBefore(legacy,gear);
+  let repairs=0;
+  const previous=new MutationObserver(()=>{
+    if(legacy.parentElement===controls&&legacy.nextElementSibling===gear)return;
+    if(++repairs>=40){previous.disconnect();return;}
+    controls.insertBefore(legacy,gear);
+  });previous.observe(container,{childList:true,subtree:true});
+  const replacement=new YouTubeAiControl(container,()=>{},()=>{});
+  try {await flush();expect(repairs).toBeLessThan(3);expect(replacement.button.isConnected).toBe(true);}
+  finally {previous.disconnect();replacement.dispose();legacy.remove();}
+});
+it('ignores caption text and progress changes while the native button is already attached', async()=>{
+  const caption=document.createElement('div');video.parentElement!.append(caption);await flush();
+  const scan=vi.spyOn(video.parentElement!,'querySelectorAll');
+  for(let i=0;i<30;i++){caption.textContent='Caption '+i;await flush();}
+  expect(scan.mock.calls.filter(([selector])=>selector==='.wupage-ai-cc-button')).toHaveLength(0);
+});
 it('creates one controller for multiple YouTube video elements sharing a player', async()=>{
   player.dispose();
   const second=document.createElement('video');video.parentElement!.prepend(second);
