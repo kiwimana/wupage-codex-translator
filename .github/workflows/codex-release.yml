@@ -33,4 +33,9 @@ jobs:
       - name: Publish checked packages
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" artifacts/*.zip artifacts/SHA256SUMS.txt artifacts/PUBLICATION-CHECK.json --verify-tag --title "WuPage Codex 翻譯 $GITHUB_REF_NAME" --notes-file docs/release-notes.md
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" artifacts/*.zip artifacts/SHA256SUMS.txt artifacts/PUBLICATION-CHECK.json --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" artifacts/*.zip artifacts/SHA256SUMS.txt artifacts/PUBLICATION-CHECK.json --verify-tag --title "WuPage Codex 翻譯 $GITHUB_REF_NAME" --notes-file docs/release-notes.md
+          fi
