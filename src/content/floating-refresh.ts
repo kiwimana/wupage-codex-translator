@@ -28,12 +28,12 @@ export const floatingRefreshStyles = `
   #wupage-floating-menu .wupage-brand-description { display: block; margin-top: 3px; color: var(--wp-muted); font: 10px/1.3 system-ui,sans-serif; letter-spacing: .8px; }
   #wupage-floating-menu .wupage-menu-header button { width: 34px; min-height: 34px; border: 1px solid var(--wp-border); border-radius: 11px; background: var(--wp-surface); }
   #wupage-floating-menu .wupage-menu-header button svg { width: 17px; height: 17px; }
-  #wupage-floating-menu .wupage-language-pair { padding: 4px; gap: 4px; border: 1px solid var(--wp-border); border-radius: 14px; background: var(--wp-soft); }
+  #wupage-floating-menu .wupage-language-pair { display: grid; grid-template-columns: minmax(0, 1fr) 16px minmax(0, 1fr) max-content; padding: 4px; gap: 4px; border: 1px solid var(--wp-border); border-radius: 14px; background: var(--wp-soft); }
   #wupage-floating-menu .wupage-language-select { flex: 1 1 0; min-width: 0; }
   #wupage-floating-menu .wupage-language-select select { border-radius: 10px; background: transparent; }
   #wupage-floating-menu .wupage-language-value { font-weight: 600; }
   #wupage-floating-menu .wupage-language-automatic { margin-left: 0; }
-  #wupage-floating-menu .wupage-language-auto { min-height: 26px; width: 34px; padding: 0 4px; border: 0; border-radius: 8px; font-size: 10px; background: var(--wp-surface); color: var(--wp-muted); }
+  #wupage-floating-menu .wupage-language-automatic .wupage-language-auto { box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; flex: none; min-height: 28px; min-width: 44px; width: auto; padding: 0 8px; gap: 0; border: 0; border-radius: 8px; font-size: 11px; line-height: 1.4; white-space: nowrap; background: var(--wp-surface); color: var(--wp-muted); }
   #wupage-floating-menu .wupage-provider-select { height: 38px; }
   #wupage-floating-menu .wupage-field-label { font-size: 11px; margin-bottom: 7px; }
   #wupage-floating-menu select[data-role="display-mode"] { min-height: 38px; border-radius: 10px; }
