@@ -64,3 +64,4 @@ button:focus-visible, select:focus-visible { outline: 2px solid var(--wp-accent)
 .footer-links { padding-top: 9px; border-top: 1px solid var(--wp-border); gap: 18px; }
 .footer-link { min-height: 20px; padding: 0 3px; font-size: 10px; }
 @media (prefers-reduced-motion: reduce) { button, .feature-indicator::after { transition: none; } }
+.extension-update-summary { display: block; width: auto; min-height: 20px; border: 0; background: transparent; color: var(--wp-muted); font: inherit; font-size: 10px; padding: 0 3px; white-space: nowrap; cursor: pointer; }

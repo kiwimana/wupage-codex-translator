@@ -6,12 +6,16 @@ import {spawn} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {createServer} from 'node:http';
 import {setTimeout as delay} from 'node:timers/promises';
+import {createHash} from 'node:crypto';
+import {applyExtensionUpdate} from '../native-chatgpt/extension-update.mjs';
+import {runProcess} from '../native-chatgpt/host.mjs';
 const root=fileURLToPath(new URL('..',import.meta.url));
 const output=path.join(root,'.npm-cache/chrome-accounts');await fs.mkdir(output,{recursive:true});
 const identity=JSON.parse(await fs.readFile(path.join(root,'native-chatgpt/chrome-extension.json'),'utf8'));
 const base=`chrome-extension://${identity.extensionId}/`;
 const binary=process.env.CHROME_TEST_BROWSER||path.join(root,'.npm-cache/chrome-test/chrome-win64/chrome.exe');
 const profile=await fs.mkdtemp(path.join(output,'profile-'));
+const extensionCopy=await fs.mkdtemp(path.join(output,'extension-'));await fs.cp(path.join(root,'dist-chrome-chatgpt'),extensionCopy,{recursive:true});
 const report={passed:false,checks:[]};let browser,socket,serial=0;const pending=new Map(),listeners=new Map();
 const server=createServer((_q,r)=>r.writeHead(200,{'content-type':'text/html;charset=utf-8'}).end('<!doctype html><meta charset="utf-8"><p>Manual translation only.</p>'));
 await new Promise(r=>server.listen(0,'127.0.0.1',r));const fixture=`http://127.0.0.1:${server.address().port}/`;
@@ -28,7 +32,13 @@ try{
  const version=await(await fetch(`http://127.0.0.1:${port}/json/version`)).json();report.browser=version.Browser;
  socket=new WebSocket(version.webSocketDebuggerUrl);await new Promise((resolve,reject)=>{socket.addEventListener('open',resolve,{once:true});socket.addEventListener('error',reject,{once:true});});
  socket.addEventListener('message',event=>{const value=JSON.parse(String(event.data));if(value.id){const task=pending.get(value.id);if(!task)return;pending.delete(value.id);clearTimeout(task.timer);if(value.error)task.reject(new Error(JSON.stringify(value.error)));else task.resolve(value.result);}else for(const handler of listeners.get(value.method)||[])handler(value);});
- const loaded=await send('Extensions.loadUnpacked',{path:path.join(root,'dist-chrome-chatgpt')});assert.equal(loaded.id,identity.extensionId);
+ // Match manual installation: CDP can initially load an unpacked extension
+ // without Developer mode, but Chrome then refuses runtime.reload().
+ const developerPage=await page('chrome://extensions/');
+ await waitFor(()=>evaluate(developerPage.session,`!!globalThis.chrome?.developerPrivate`));
+ await evaluate(developerPage.session,`chrome.developerPrivate.updateProfileConfiguration({inDeveloperMode:true});true`);await delay(200);
+ await send('Target.closeTarget',{targetId:developerPage.targetId});
+ const loaded=await send('Extensions.loadUnpacked',{path:extensionCopy});assert.equal(loaded.id,identity.extensionId);
  const worker=await waitFor(async()=>{const {targetInfos}=await send('Target.getTargets');return targetInfos.find(t=>t.type==='service_worker'&&t.url.startsWith(base));});
  const workerSession=await attach(worker.targetId);
  await waitFor(()=>evaluate(workerSession,`typeof chrome!=='undefined'&&!!chrome.runtime?.connectNative`));
@@ -60,6 +70,16 @@ try{
  await send('Target.closeTarget',{targetId:popupTarget.targetId});
  assert.equal(await api(`return (await chrome.runtime.sendMessage({type:'GET_SETTINGS'})).data.providers.find(p=>p.id==='claude-desktop').model;`),'sonnet');
  check('actual Chrome toolbar popup saves the model and shows all controls without clipping');
+ const updateVersion='1.9.1';
+ await evaluate(workerSession,`globalThis.__originalUpdateFetch=globalThis.fetch;globalThis.fetch=(url,options)=>String(url)==='https://api.github.com/repos/kiwimana/wupage-codex-translator/releases/latest'?Promise.resolve(new Response(JSON.stringify({draft:false,prerelease:false,tag_name:'v${updateVersion}',assets:[{name:'wupage-codex-${updateVersion}-chrome.zip',size:100,browser_download_url:'https://github.com/kiwimana/wupage-codex-translator/releases/download/v${updateVersion}/wupage-codex-${updateVersion}-chrome.zip'}]}))):globalThis.__originalUpdateFetch(url,options);true`);
+ await evaluate(options.session,`document.querySelector('a[href="#extensionUpdates"]').click();true`);
+ await waitFor(()=>evaluate(options.session,`!document.querySelector('#extensionUpdates').hidden&&!document.querySelector('[data-update-now]').disabled`));
+ assert.equal(await evaluate(options.session,`document.querySelector('[data-update-auto]').checked`),false);
+ await evaluate(options.session,`document.querySelector('[data-update-now]').click();true`);
+ await waitFor(()=>evaluate(options.session,`document.querySelector('[data-update-status]').textContent.includes('發現新版 v${updateVersion}')`));
+ assert.equal(await evaluate(options.session,`document.querySelector('[data-update-install]').disabled`),false);
+ const updateScreenshot=await send('Page.captureScreenshot',{format:'png'},options.session);await fs.writeFile(path.join(output,'chrome-update-settings.png'),Buffer.from(updateScreenshot.data,'base64'));
+ check('update settings check a fixture release, show the new version and leave native auto-install off by default');
  const video=await page('about:blank');await send('Page.enable',{},video.session);await send('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'no-preference'}]},video.session);await send('Fetch.enable',{patterns:[{urlPattern:'https://www.youtube.com/*',requestStage:'Request'}]},video.session);
  const videoHtml=`<!doctype html><style>#movie_player{position:relative;width:900px;height:506px}video{width:100%;height:100%}.ytp-right-controls{position:absolute;bottom:0;right:0;display:flex;height:48px}.ytp-button{height:48px}</style><div id="movie_player"><video muted playsinline></video><div class="ytp-right-controls"><button class="ytp-subtitles-button">CC</button><button class="ytp-settings-button">Settings</button></div></div><script>const c=document.createElement('canvas');c.width=900;c.height=506;document.querySelector('video').srcObject=c.captureStream(1);setInterval(()=>c.getContext('2d').fillRect(0,0,900,506),100);</script>`;
  listeners.set('Fetch.requestPaused',[event=>{if(event.sessionId===video.session)void send('Fetch.fulfillRequest',{requestId:event.params.requestId,responseCode:200,responseHeaders:[{name:'Content-Type',value:'text/html;charset=utf-8'}],body:Buffer.from(videoHtml).toString('base64')},video.session);}]);
@@ -68,8 +88,32 @@ try{
  const control=await evaluate(video.session,`(()=>{const b=document.querySelector('.wupage-ai-cc-button');b.setAttribute('aria-busy','true');return {next:b.nextElementSibling.className,animation:getComputedStyle(b,'::before').animationName};})()`);
  assert.equal(control.next,'ytp-settings-button');assert.equal(control.animation,'wupage-ai-cc-spin');
  check('YouTube player AI button is mounted before Settings and its loading circle renders in Chrome');
+ for(let i=0;i<4;i++){
+  await evaluate(video.session,`(()=>{const bar=document.querySelector('.ytp-right-controls');bar.replaceWith(bar.cloneNode(true));document.dispatchEvent(new Event('yt-navigate-finish'));return true;})()`);
+  await waitFor(()=>evaluate(video.session,`document.querySelectorAll('.wupage-ai-cc-button').length===1`));await delay(200);
+  assert.equal(await evaluate(video.session,`document.querySelectorAll('.wupage-ai-cc-button').length`),1);
+ }
+ await evaluate(video.session,`(()=>{const original=document.querySelector('video');const extra=original.cloneNode(false);extra.srcObject=original.srcObject;original.parentElement.prepend(extra);return true;})()`);await delay(500);
+ assert.equal(await evaluate(video.session,`document.querySelectorAll('.wupage-ai-cc-button').length`),1);
+ check('repeated YouTube navigation, cloned controls and additional video elements keep exactly one AI button');
  assert.equal(await evaluate(workerSession,'globalThis.__accountTestNativeCalls'),0);
  assert.equal((await api(`return (await chrome.runtime.sendMessage({type:'GET_TRANSLATION_DEBUG'})).data;`)).tasks.length,0);
+ if(process.platform==='win32'){
+  const archive=path.join(profile,'update-fixture.zip');
+  const makeArchive=await runProcess('python',['-c',`from pathlib import Path\nimport zipfile,json,sys\nroot=Path(sys.argv[1])\nwith zipfile.ZipFile(sys.argv[2],'w',zipfile.ZIP_DEFLATED) as archive:\n for file in root.rglob('*'):\n  if file.is_file():\n   data=file.read_bytes()\n   if file.name=='manifest.json':\n    manifest=json.loads(data);manifest['version']='1.9.1';data=json.dumps(manifest).encode()\n   archive.writestr(file.relative_to(root).as_posix(),data)`,extensionCopy,archive]);assert.equal(makeArchive.code,0,makeArchive.stderr);
+  const bytes=await fs.readFile(archive);
+  await applyExtensionUpdate(extensionCopy,{version:'1.9.1',size:bytes.length},bytes,createHash('sha256').update(bytes).digest('hex'),async(file,destination,signal)=>{
+   const extracted=await runProcess('powershell.exe',['-NoProfile','-ExecutionPolicy','Bypass','-File',path.join(root,'native-chatgpt/extract-update.ps1'),'-Archive',file,'-Destination',destination],{signal});assert.equal(extracted.code,0,extracted.stderr);
+  });
+  await evaluate(workerSession,'chrome.runtime.reload();true').catch(error=>{if(!/closed|detached|context|target/i.test(String(error)))throw error;});
+  await delay(800);
+  const reopened=await page(base+'options.html');await delay(500);
+  report.reloadState=await evaluate(reopened.session,`({version:globalThis.chrome?.runtime?.getManifest().version,provider:document.querySelector('#providerForm')?.dataset.providerId})`);
+  await waitFor(()=>evaluate(reopened.session,`!!document.querySelector('#providerForm')?.dataset.providerId`));
+  assert.equal(await evaluate(reopened.session,`chrome.runtime.getManifest().version`),'1.9.1');
+  const retained=await evaluate(reopened.session,`(async()=>{const r=await chrome.runtime.sendMessage({type:'GET_SETTINGS'});return r.data.providers.find(p=>p.id==='claude-desktop').model;})()`);assert.equal(retained,'sonnet');
+  report.installedFixtureVersion='1.9.1';check('real staged update of a loaded Chrome extension reloads the new version and retains model settings');
+ }
  report.nativeCalls=0;report.translationRequests=0;report.loginActions=0;report.passed=true;console.log(JSON.stringify(report));
 }catch(error){report.error=String(error);throw error;}
 finally{

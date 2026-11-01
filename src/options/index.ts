@@ -24,8 +24,10 @@ import { readRequestTemplate, setupProviderTabs } from "./provider-advanced";
 import { isDoubaoBrowserSupported } from "../shared/doubao";
 import { formatDoubaoStatus, isDoubaoProviderUnavailable, syncDoubaoTargetControls } from "../shared/doubao-ui";
 import { renderUiIcons, uiIconMarkup } from "../shared/ui-icons";
+import { setupExtensionUpdateUI } from "../shared/extension-update-ui";
 
 renderUiIcons();
+setupExtensionUpdateUI(document.querySelector("#extensionUpdates"));
 
 const settingsNavigation = setupSettingsNavigation(query<HTMLElement>(".settings"));
 const shortcutControls = setupShortcutSettings(query<HTMLElement>("#shortcutSettings"));

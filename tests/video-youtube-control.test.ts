@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { PlayerSubtitleController } from "../src/content/video-player";
-import { initVideoSubtitles } from "../src/content/video-subtitles";
+import { initVideoSubtitles, VideoSubtitleManager } from "../src/content/video-subtitles";
 import { sendRuntimeRequest } from "../src/content/runtime";
 import { DEFAULT_SETTINGS, SETTINGS_KEY } from "../src/shared/defaults";
 import { VIDEO_PLATFORMS } from "../src/video/platforms";
 import type { ExtensionSettings } from "../src/shared/types";
+import { YouTubeAiControl } from "../src/content/youtube-ai-control";
 vi.mock("../src/shared/chatgpt-build", () => ({ CHATGPT_BUILD: true }));
 vi.mock("../src/content/runtime", () => ({ sendRuntimeRequest: vi.fn() }));
 vi.mock("../src/video/bridge-client", () => ({ pageSubtitleCatalogue: vi.fn(async()=>undefined), loadPageSubtitles: vi.fn() }));
@@ -108,6 +109,34 @@ it('reattaches once when YouTube replaces the controls and removes itself on dis
   expect(replacement.querySelectorAll('.wupage-ai-cc-button')).toHaveLength(1);
   expect(button().nextElementSibling?.className).toBe('ytp-settings-button');
   player.dispose();replacement.append(document.createElement('span'));await flush();expect(document.querySelector('.wupage-ai-cc-button')).toBeNull();
+});
+it('removes a cloned AI button when YouTube clones the whole control bar', async()=>{
+  const controls=document.querySelector('.ytp-right-controls')!;
+  controls.replaceWith(controls.cloneNode(true)); await flush();
+  expect(document.querySelectorAll('.wupage-ai-cc-button')).toHaveLength(1);
+  expect(button().nextElementSibling?.className).toBe('ytp-settings-button');
+  button().click(); await flush();
+  expect(vi.mocked(sendRuntimeRequest).mock.calls.filter(([r])=>r.type==='TRANSLATE_VIDEO_SUBTITLES')).toHaveLength(1);
+});
+it('supersedes an earlier control without observers fighting over the same player', async()=>{
+  const toggle=vi.fn(), container=video.parentElement!;
+  const replacement=new YouTubeAiControl(container,toggle,()=>{}); await flush();
+  expect(document.querySelectorAll('.wupage-ai-cc-button')).toHaveLength(1);
+  expect(document.querySelectorAll('style[data-wupage-video-style="youtube-control"]')).toHaveLength(1);
+  for(let i=0;i<4;i++){document.querySelector('.ytp-right-controls')!.append(document.createElement('span'));await flush();}
+  button().click(); expect(toggle).toHaveBeenCalledTimes(1);
+  player.dispose(); expect(document.querySelectorAll('.wupage-ai-cc-button')).toHaveLength(1);
+  replacement.dispose(); expect(document.querySelectorAll('.wupage-ai-cc-button')).toHaveLength(0);
+});
+it('creates one controller for multiple YouTube video elements sharing a player', async()=>{
+  player.dispose();
+  const second=document.createElement('video');video.parentElement!.prepend(second);
+  vi.spyOn(second,'getBoundingClientRect').mockReturnValue(new DOMRect(0,0,900,506));
+  const manager=new VideoSubtitleManager(); await flush();
+  try {
+    for(let i=0;i<3;i++){manager.refresh();await flush();expect(document.querySelectorAll('.wupage-ai-cc-button')).toHaveLength(1);expect(document.querySelectorAll('[data-wupage-video]')).toHaveLength(1);}
+    video.remove();manager.refresh();await flush();expect(document.querySelectorAll('.wupage-ai-cc-button')).toHaveLength(1);
+  }finally{manager.dispose();}
 });
 it('inserts beside CC and Settings in the new nested YouTube controls',async()=>{
   const controls=document.querySelector('.ytp-right-controls')!;

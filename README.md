@@ -31,6 +31,7 @@ Codex 與 Claude 的不保存模式，和 Gemini 的「暫存後清理」有差�
 - 明暗主題、設定頁及 PDF 工作區。
 - 三個帳號服務分別選模型，支援「自動」、預設模型及自訂模型名稱；小視窗可快速切換。
 - 設定頁提供「偵測本機工具」及獨立的「連結帳號」按鈕，預設不偵測、不登入。找到工具不代表已登入。
+- 自動檢查 GitHub 穩定版；Chrome 可透過本機橋接自動安裝，Firefox 臨時載入版提示下載與重新載入。
 - 預設手動啟動，停用永久本機譯文快取；Codex 與 Claude 停用此次對話保存，Gemini 使用獨立暫存並於完成、錯誤或取消後清理。
 
 ## 資料會送去哪裡？
@@ -83,7 +84,25 @@ Chrome 版使用公開金鑰固定開發版識別碼 `lfhpgjnpadlfkafdnbeepfpjhf
 
 發布包未經 Mozilla 簽章，暫用擴充在關閉 Firefox 後需要重新載入。目前附帶橋接安裝程式僅支援 Windows；macOS／Linux 需要另行實作原生主機註冊及啟動器。
 
+## 擴充自動更新
+
+**v1.9.0 是第一次提供更新功能的版本。** 舊版請先手動下載新版擴充與橋接；之後可由小視窗底部的版本按鈕，或設定頁「擴充更新」管理更新。
+
+- 預設每 6 小時向本儲存庫 GitHub Release 檢查穩定版，可關閉；也可按「立即檢查」。小視窗會提示新版，不會送出網頁內容或啟動 AI 登入。
+- **Chrome 自動安裝**：先將新版橋接解壓到原橋接資料夾，執行下列指令（把路徑換成在 `chrome://extensions` 載入的擴充資料夾），再到設定頁開啟「自動安裝 Chrome 更新」。預設不自動覆寫檔案。
+
+  ```powershell
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -Browser Chrome -ChromeExtensionPath "D:\WuPage\chrome"
+  ```
+
+  這必須是只存放擴充檔案、含 `manifest.json` 的獨立資料夾；請保持 Chrome「開發人員模式」開啟，才能重新載入開發版。更新只替換這個指定資料夾，保留瀏覽器裡的翻譯偏好與模型設定，不更新橋接或讀取 AI 登入資料。擴充會在沒有正在執行的翻譯工作時安裝，並等工作結束後重新載入；原本開著的網頁請重新整理。也可手動按「安裝更新」。
+- **Firefox 臨時載入版**：自動檢查並提示新版本；下載 Firefox ZIP、解壓覆蓋原擴充資料夾，再到 `about:debugging#/runtime/this-firefox` 按「重新載入」。目前沒有 Mozilla 簽署包，不能宣稱會像商店擴充一樣自動安裝。
+
+下載只使用本專案的 GitHub 穩定 Release，核對版本、Chrome 識別碼與 SHA-256，解壓到隔離目錄後再替換，失敗時保留或還原原檔。不接受網頁提供的下載網址或檔案路徑。這是本機橋接協助更新開發版，並非 Chrome 商店自動更新；[Chrome 說明](https://developer.chrome.com/docs/extensions/how-to/distribute/host-on-linux)、[Firefox 更新說明](https://extensionworkshop.com/documentation/manage/updating-your-extension/)。
+
 ## YouTube 雙語字幕
+
+同一播放器只會有一個 AI 按鈕。切換影片、廣告、重建或複製控制列時會清理舊按鈕，避免多個 AI 按鈕重疊。
 
 先選取英文或其他語言 CC，再按右下「AI」，或從擴充小視窗按「AI 翻譯 CC 字幕」。原文在上、譯文在下，目標語言、帳號服務與模型採目前設定。字幕準備時顯示載入圓圈。再次按下停止；更換另一支影片不會自行開始。
 

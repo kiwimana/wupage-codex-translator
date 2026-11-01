@@ -1,4 +1,4 @@
-param([switch]$PrepareOnly, [ValidateSet('Firefox','Chrome','Both')][string]$Browser='Both', [string]$CodexPath, [string]$ClaudePath, [string]$GeminiPath, [string]$NodePath)
+param([switch]$PrepareOnly, [ValidateSet('Firefox','Chrome','Both')][string]$Browser='Both', [string]$CodexPath, [string]$ClaudePath, [string]$GeminiPath, [string]$NodePath, [string]$ChromeExtensionPath)
 $ErrorActionPreference = 'Stop'
 $bridgeDirectory = [System.IO.Path]::GetFullPath($PSScriptRoot)
 $previousConfig = $null
@@ -42,6 +42,15 @@ if ($geminiPath -and [IO.Path]::GetExtension($geminiPath) -in @('.cmd', '.ps1'))
 }
 if (-not $codexPath -and -not $claudePath -and -not $geminiPath) { throw 'Install Codex, Claude Code, or Gemini CLI, then run this installer again.' }
 $config = @{ nodePath = $nodePath; codexPath = $codexPath; claudePath = $claudePath; geminiPath = $geminiPath }
+$extensionPath = if ($ChromeExtensionPath) { $ChromeExtensionPath } else { $previousConfig.chromeExtensionPath }
+if ($extensionPath) {
+  $extensionPath = (Resolve-Path -LiteralPath $extensionPath).Path
+  $extensionManifest = Get-Content -LiteralPath (Join-Path $extensionPath 'manifest.json') -Raw | ConvertFrom-Json
+  $updateIdentity = Get-Content -LiteralPath (Join-Path $bridgeDirectory 'chrome-extension.json') -Raw | ConvertFrom-Json
+  if ($extensionManifest.key -ne $updateIdentity.key -or $extensionManifest.manifest_version -ne 3 -or $extensionManifest.browser_specific_settings) { throw 'Select the unpacked public Chrome extension directory containing manifest.json.' }
+  if ($extensionPath -eq $bridgeDirectory -or (Test-Path -LiteralPath (Join-Path $extensionPath '.git')) -or (Test-Path -LiteralPath (Join-Path $extensionPath 'node_modules'))) { throw 'Use a dedicated unpacked Chrome extension directory.' }
+  $config.chromeExtensionPath = $extensionPath
+}
 $utf8 = New-Object System.Text.UTF8Encoding($false)
 [System.IO.File]::WriteAllText((Join-Path $bridgeDirectory 'bridge.config.json'), ($config | ConvertTo-Json), $utf8)
 $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'

@@ -6,8 +6,13 @@ export class YouTubeAiControl {
   private readonly style = document.createElement("style");
   private readonly observer: MutationObserver;
   private disposed = false;
+  // A DOM event also reaches an older copy of the module after reinjection.
+  private readonly superseded = () => this.dispose();
 
   constructor(private player: HTMLElement, toggle: () => void, private attached: (value: boolean) => void) {
+    player.dispatchEvent(new Event("wupage-ai-cc-takeover"));
+    player.addEventListener("wupage-ai-cc-takeover", this.superseded);
+    player.querySelectorAll('.wupage-ai-cc-button,style[data-wupage-video-style="youtube-control"]').forEach(node => node.remove());
     this.button.type = "button";
     this.button.className = "ytp-button wupage-ai-cc-button";
     this.button.setAttribute("data-wupage-video-control", "");
@@ -49,6 +54,8 @@ export class YouTubeAiControl {
     if (this.disposed) return;
     const controls = this.player.querySelector<HTMLElement>(".ytp-right-controls");
     if (!controls) { this.attached(false); return; }
+    // YouTube can clone an existing bar, including our button and its old state.
+    this.player.querySelectorAll(".wupage-ai-cc-button").forEach(button => { if (button !== this.button) button.remove(); });
     const before = controls.querySelector(".ytp-settings-button");
     const parent = before?.parentElement ?? controls;
     if (this.button.parentElement !== parent || (before && this.button.nextElementSibling !== before)) {
@@ -67,6 +74,8 @@ export class YouTubeAiControl {
   }
 
   dispose(): void {
-    this.disposed = true; this.observer.disconnect(); this.button.remove(); this.style.remove(); this.attached(false);
+    if (this.disposed) return;
+    this.disposed = true; this.observer.disconnect(); this.player.removeEventListener("wupage-ai-cc-takeover", this.superseded);
+    this.button.remove(); this.style.remove(); this.attached(false);
   }
 }

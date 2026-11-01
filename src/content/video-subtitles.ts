@@ -106,11 +106,19 @@ export class VideoSubtitleManager {
     if (this.disposed) return;
     if (CHATGPT_BUILD && this.pageMediaKey !== mediaKey()) this.stop();
     this.observer.disconnect();
+    const platform = videoPlatform();
+    const containers = new Set<HTMLElement>();
     const candidates = queryVideoRoots(document, root => this.observer.observe(root, { childList: true, subtree: true }))
       .map(video => ({ video, rect: video.getBoundingClientRect() }))
       .filter(({ video, rect }) => video.title !== "Advertisement" && rect.width >= 160 && rect.height >= 90)
       .map(({ video, rect }) => ({ video, score: this.rank(video, rect) }))
       .sort((a, b) => Number(!!this.players.get(b.video)?.enabled) - Number(!!this.players.get(a.video)?.enabled) || b.score - a.score)
+      .filter(({ video }) => {
+        if (platform?.id !== "youtube") return true;
+        const container = playerContainer(video, platform);
+        if (containers.has(container)) return false;
+        containers.add(container); return true;
+      })
       .slice(0, 12);
     const selected = new Set(candidates.map(({ video }) => video));
     for (const [video, player] of this.players) if (!selected.has(video) || !player.connected) {
@@ -119,7 +127,6 @@ export class VideoSubtitleManager {
     }
     for (const { video } of candidates) {
       if (this.players.has(video)) continue;
-      const platform = videoPlatform();
       const player = new PlayerSubtitleController(video, playerContainer(video, platform), platform, video === candidates[0].video);
       this.players.set(video, player);
       if (this.resumePlayback) { this.resumePlayback = false; void player.start(); }

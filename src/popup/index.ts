@@ -22,9 +22,11 @@ import { normalizeAppearance } from "../shared/appearance";
 import { applyPopupMenuLayout } from "../shared/popup-menu";
 import { paragraphClickHint } from "../shared/local-shortcuts";
 import { CHATGPT_BUILD } from "../shared/chatgpt-build";
+import { setupExtensionUpdateUI } from "../shared/extension-update-ui";
 import { DESKTOP_ACCOUNTS, desktopEngine } from "../shared/desktop-account";
 
 renderUiIcons();
+setupExtensionUpdateUI(document.querySelector("#extensionUpdateSummary"), true);
 document.querySelector<HTMLElement>(".session-note")?.toggleAttribute("hidden", !CHATGPT_BUILD);
 
 const targetLang = query<HTMLSelectElement>("#targetLang");

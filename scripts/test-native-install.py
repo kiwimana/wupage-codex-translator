@@ -19,8 +19,15 @@ with tempfile.TemporaryDirectory(prefix='wupage-public-install-') as temporary:
     for name in ['install-a', 'install-b']:
         target = Path(temporary) / name
         shutil.copytree(source, target)
+        extra = []
+        if name == 'install-b':
+            chrome = Path(temporary) / 'chrome'
+            chrome.mkdir()
+            identity = json.loads((target / 'chrome-extension.json').read_text(encoding='utf-8'))
+            (chrome / 'manifest.json').write_text(json.dumps({'manifest_version': 3, 'key': identity['key']}), encoding='utf-8')
+            extra = ['-ChromeExtensionPath', str(chrome)]
         result = subprocess.run(['powershell.exe', '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass',
-            '-File', str(target / 'install.ps1'), '-PrepareOnly', '-NodePath', node, '-CodexPath', node],
+            '-File', str(target / 'install.ps1'), '-PrepareOnly', '-NodePath', node, '-CodexPath', node, *extra],
             capture_output=True, text=True)
         assert result.returncode == 0, result.stderr
         config = json.loads((target / 'bridge.config.json').read_text(encoding='utf-8-sig'))
@@ -28,7 +35,8 @@ with tempfile.TemporaryDirectory(prefix='wupage-public-install-') as temporary:
         chrome_manifest = json.loads((target / 'org.wupage.codex_bridge.chrome.json').read_text(encoding='utf-8-sig'))
         identity = json.loads((target / 'chrome-extension.json').read_text(encoding='utf-8'))
         assert config['nodePath'] == node and config['codexPath'] == node
-        assert set(config) == {'nodePath', 'codexPath', 'claudePath', 'geminiPath'}
+        assert set(config) == {'nodePath', 'codexPath', 'claudePath', 'geminiPath'} | ({'chromeExtensionPath'} if extra else set())
+        if extra: assert Path(config['chromeExtensionPath']).resolve() == chrome.resolve()
         assert Path(manifest['path']).parent.resolve() == target.resolve()
         assert Path(manifest['path']).is_file()
         assert manifest['allowed_extensions'] == ['codex-translator@wupage.local']

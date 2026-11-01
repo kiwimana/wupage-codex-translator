@@ -30,3 +30,11 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--wp-accent); }
 @media (max-width: 960px) { .settings { grid-template-columns: 180px minmax(0, 1fr); gap: 20px; width: calc(100% - 40px); } section { padding: 22px; } }
 @media (max-width: 720px) { .settings { grid-template-columns: minmax(0, 1fr); width: calc(100% - 28px); padding: 22px 0; gap: 22px; } .settings-sidebar { gap: 20px; } .settings-nav a { min-height: 40px; padding: 0 12px; } section { padding: 20px; border-radius: 16px; } }
 @media (max-width: 440px) { .general-toggles { grid-template-columns: minmax(0, 1fr); } }
+/* Account builds keep updater settings separate from translation preferences. */
+#extensionUpdates { margin: 20px 0; padding: 24px; border: 1px solid var(--wp-border); border-radius: 16px; }
+#extensionUpdates .update-toggle { display: flex; align-items: center; gap: 10px; margin: 18px 0; }
+#extensionUpdates .update-toggle input { width: 18px; height: 18px; flex: 0 0 18px; }
+#extensionUpdates .update-help { line-height: 1.8; overflow-wrap: anywhere; opacity: .8; }
+#extensionUpdates .update-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+#extensionUpdates [data-update-status] { line-height: 1.7; overflow-wrap: anywhere; }
+#extensionUpdates [hidden] { display: none !important; }

@@ -46,3 +46,4 @@ jobs:
         with:
           python-version: '3.x'
       - run: python scripts/test-native-install.py
+      - run: python scripts/test-native-update.py

@@ -1,6 +1,6 @@
 {
   "name": "wupage",
-  "version": "1.8.1",
+  "version": "1.9.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -80,7 +80,7 @@
     "test:page-scan:firefox": "node scripts/test-page-scan.mjs --firefox",
     "build:firefox:codex": "vite build --mode firefox-chatgpt",
     "build:chrome:codex": "vite build --mode chrome-chatgpt",
-    "test:native": "node --test native-chatgpt/host.test.mjs",
+    "test:native": "node --test native-chatgpt/host.test.mjs native-chatgpt/extension-update.test.mjs",
     "check:public": "python scripts/check-public-package.py --source .",
     "package:codex": "python scripts/package-codex-release.py"
   },

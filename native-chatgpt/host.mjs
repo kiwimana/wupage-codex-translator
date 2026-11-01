@@ -4,6 +4,7 @@ import os from 'node:os';
 import { spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import chromeIdentity from './chrome-extension.json' with { type: 'json' };
+import { manageExtensionUpdate } from './extension-update.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 export const extensionId = 'codex-translator@wupage.local';
@@ -218,7 +219,10 @@ export async function main() {
       };
       process.stdin.on('data', receive);
     });
-    const response = input?.type === 'translate' ? await translate(input, controller.signal) : await manageAccount(input, controller.signal);
+    if (input?.type?.startsWith('extension-update') && !process.argv.includes(chromeOrigin)) throw new Error('本機自動安裝目前只支援 Chrome 開發版。');
+    const response = input?.type === 'translate' ? await translate(input, controller.signal)
+      : input?.type?.startsWith('extension-update') ? await manageExtensionUpdate(input, controller.signal, runProcess, root)
+      : await manageAccount(input, controller.signal);
     if (!controller.signal.aborted) await new Promise(resolve => process.stdout.write(encodeMessage(response), resolve));
   } catch (error) {
     if (!controller.signal.aborted) await new Promise(resolve => process.stdout.write(encodeMessage({ ok: false,

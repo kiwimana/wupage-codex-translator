@@ -23,3 +23,11 @@ Chrome 安裝時使用 `install.ps1 -Browser Chrome`，Firefox 可用 `-Browser 
 模型可選「自動」、預設名稱或自訂名稱，可用性依使用者帳號。Codex 使用 `--ephemeral`；Claude 使用 `--no-session-persistence` 並停用一般工具、MCP 與 hooks，只保留結構化翻譯輸出。Gemini 使用獨立暫存 home，以硬連結提供既有 OAuth 登入，無法建立時使用權限受限的暫存副本，並停用工具與擴充。完成、錯誤與取消後只清理自行建立的目錄；電源中斷或強制終止仍可能留下暫存。這些措施不代表服務端零留存。
 
 修復時執行 `repair.cmd`。移除時在原資料夾執行 `uninstall.ps1`，只刪除與目前安裝路徑相符的橋接登錄。`-PrepareOnly` 僅建立本機安裝檔、不變更登錄，供測試使用。
+
+## Chrome 開發版更新
+
+如需自動安裝 Chrome 擴充更新，執行 `install.ps1 -Browser Chrome -ChromeExtensionPath "D:\WuPage\chrome"`，指定目前 Chrome 載入、含根 `manifest.json` 的獨立擴充資料夾，再於擴充設定「擴充更新」開啟自動安裝。路徑只保存在本機的 `bridge.config.json`，不提交到 GitHub。重新執行安裝程式會保留先前指定的路徑。
+
+`extension-update.mjs` 只接受來自本擴充 Chrome 識別碼的更新請求，下載固定 GitHub 儲存庫的穩定 Release，驗證 SHA-256、版本與公開金鑰。`extract-update.ps1` 拒絕路徑跳脫、重複檔名、符號連結與可執行主機檔案；在隔離目錄解壓後交換擴充資料夾，失敗時保留原檔或還原。若 Windows 阻止還原，原檔會保留在同層 `.wupage-update-*` 的 `previous` 資料夾，錯誤訊息會提示，不刪除唯一備份。
+
+更新不啟動 Codex／Claude／Gemini，不讀取登入資料，不變更登錄或更新橋接本身。Firefox 臨時版只提供擴充內的版本檢查與下載提示，需要手動重新載入。

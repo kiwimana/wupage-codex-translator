@@ -314,6 +314,8 @@ export interface TranslatorProvider {
 }
 
 export type RuntimeRequest =
+  | { type: "GET_EXTENSION_UPDATE" | "CHECK_EXTENSION_UPDATE" | "INSTALL_EXTENSION_UPDATE" }
+  | { type: "CONFIGURE_EXTENSION_UPDATE"; autoCheck: boolean; autoInstall: boolean }
   | { type: "DESKTOP_ACCOUNT_STATUS" | "CONNECT_DESKTOP_ACCOUNT"; engine: "codex" | "gemini" | "claude" }
   | import("./frame-session").FrameSessionRequest
   | { type: "EXECUTE_TRANSLATION_SHORTCUT"; command: TranslationShortcut }

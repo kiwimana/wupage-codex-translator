@@ -18,7 +18,8 @@ extensions = {browser: output / f'wupage-codex-{version}-{browser}.zip' for brow
 bridge = output / f'wupage-codex-{version}-windows-bridge.zip'
 source = output / f'wupage-codex-{version}-source.zip'
 bridge_names = ['host.mjs', 'launcher.cs', 'translation-schema.json', 'install.ps1',
-                'uninstall.ps1', 'repair.cmd', 'connect.ps1', 'chrome-extension.json', 'README.md']
+                'uninstall.ps1', 'repair.cmd', 'connect.ps1', 'chrome-extension.json', 'README.md',
+                'extension-update.mjs', 'extract-update.ps1']
 for browser, extension in extensions.items():
     build = root / f'dist-{browser}-chatgpt'
     manifest = json.loads((build / 'manifest.json').read_text(encoding='utf-8'))

@@ -20,9 +20,12 @@ import type { FrameSessionRequest } from "../shared/frame-session";
 import { readParagraphMode } from "../shared/paragraph-mode";
 import { saveParagraphMode } from "./paragraph-mode";
 import { desktopAccountAction } from "./chatgpt-desktop";
+import { initExtensionUpdates, updateStatus, checkUpdates, configureUpdates, installUpdate } from "./extension-update";
+import { CHATGPT_BUILD } from "../shared/chatgpt-build";
 
 frameSessions.install();
 initVideoSettings();
+initExtensionUpdates();
 
 chrome.tabs?.onRemoved?.addListener(clearVideoTab);
 
@@ -54,6 +57,17 @@ try {
 async function handleMessage(request: RuntimeRequest, sender: chrome.runtime.MessageSender): Promise<unknown> {
   if (isFrameRequest(request)) return frameSessions.handle(request, sender);
   switch (request.type) {
+    case "GET_EXTENSION_UPDATE":
+    case "CHECK_EXTENSION_UPDATE":
+    case "INSTALL_EXTENSION_UPDATE":
+    case "CONFIGURE_EXTENSION_UPDATE": {
+      if (!CHATGPT_BUILD || sender.id !== chrome.runtime.id || !["options.html", "popup.html"].some(page => sender.url?.split(/[?#]/u)[0] === chrome.runtime.getURL(page))) throw new Error("請從擴充的設定或小視窗管理更新。");
+      if (request.type === "GET_EXTENSION_UPDATE") return updateStatus();
+      if (request.type === "CHECK_EXTENSION_UPDATE") return checkUpdates();
+      if (request.type === "INSTALL_EXTENSION_UPDATE") return installUpdate();
+      if (request.type === "CONFIGURE_EXTENSION_UPDATE") return configureUpdates(request.autoCheck, request.autoInstall);
+      throw new Error("更新操作無效。");
+    }
     case "GET_PARAGRAPH_MODE":
       return { enabled: await readParagraphMode() };
     case "SET_PARAGRAPH_MODE":
