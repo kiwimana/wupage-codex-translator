@@ -1,8 +1,8 @@
-# WuPage Codex 翻譯 · Firefox
+# WuPage Codex 翻譯 · Chrome／Firefox
 
 繁體中文網頁雙語翻譯擴充套件。按下翻譯後，由**使用者自己電腦上的 Codex、Gemini CLI 或 Claude Code**，使用安裝者自己的登入帳號處理，不需要填入 API 金鑰。這些是官方本機命令列工具；不會自動操作桌面聊天視窗，也不會直接共用桌面聊天程式的登入。
 
-這是 [mr-wuliu/wupage](https://github.com/mr-wuliu/wupage) 的非官方衍生 **fork**，保留原作者的提交歷史。`codex-firefox` 是本改版分支，加入本機 Codex 橋接、繁體中文介面、紫色明暗主題與 YouTube AI 雙語字幕；`main` 保留上游版本供後續同步。不是 OpenAI 或原專案的官方產品。
+這是 [mr-wuliu/wupage](https://github.com/mr-wuliu/wupage) 的非官方衍生 **fork**，保留原作者的提交歷史。`codex-firefox` 是本改版分支，同時提供 Chrome 與 Firefox 版，加入本機帳號橋接、繁體中文介面、紫色明暗主題與 YouTube AI 雙語字幕；`main` 保留上游版本供後續同步。不是 OpenAI 或原專案的官方產品。
 
 ![明暗介面](docs/ui-preview.png)
 
@@ -36,14 +36,34 @@ Codex 與 Claude 的不保存模式，和 Gemini 的「暫存後清理」有差�
 ## 資料會送去哪裡？
 
 ```text
-你的 Firefox → 你本機的原生橋接 → 你選的本機工具 → 該工具的雲端服務
+你的 Chrome／Firefox → 你本機的原生橋接 → 你選的本機工具 → 該工具的雲端服務
 ```
 
 公開套件沒有作者的登入資料、API 金鑰、Cookie、Windows 使用者路徑、遠端桌面、代理伺服器或通道設定。原生橋接使用程序標準輸入輸出，不開設 HTTP 服務，也不會連回作者電腦。每次安裝都在安裝者電腦上產生自己的程式路徑設定及目前 Windows 使用者的登錄項目。
 
 翻譯計入安裝者自己所選帳號與模型的可用額度。這是雲端翻譯；本機紀錄清理不代表服務端零留存。指定模型不可用時顯示錯誤，不自動改用另一服務或作者帳號。詳見[隱私說明](PRIVACY.md)。
 
-## 安裝（Windows）
+## Chrome 安裝（Windows）
+
+需要 Chrome 127+、Node.js 22+，以及至少一個本機工具：Codex、Gemini CLI 或 Claude Code。使用者自行安裝工具與登入，單純載入擴充不會連結帳號或翻譯。
+
+1. 從 [Releases](https://github.com/kiwimana/wupage-codex-translator/releases/latest) 下載 **`chrome.zip` 結尾**的擴充包與 **`windows-bridge.zip` 結尾**的橋接包，分別解壓縮到固定資料夾。
+2. Chrome 網址列輸入 `chrome://extensions`，開啟右上角「開發人員模式」。
+3. 按「載入未封裝項目」，選擇 Chrome 擴充解壓縮後、含根 `manifest.json` 的資料夾。
+4. 在橋接解壓縮資料夾執行：
+
+   ```powershell
+   powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -Browser Chrome
+   ```
+
+5. 將 WuPage 釘選到工具列。開啟小視窗選服務與模型，按「偵測／連結」到設定頁；先手動偵測，再自行決定是否連結帳號。按「測試服務」才會送出短句並使用少量額度。
+6. 重新整理要翻譯的網頁，再按「翻譯全文」、懸浮球或 YouTube 的 AI 按鈕。
+
+Chrome 版使用公開金鑰固定開發版識別碼 `lfhpgjnpadlfkafdnbeepfpjhfbdjblb`，橋接僅允許這個精確來源；請保留 `manifest.json` 的 `key`。此公開金鑰只供擴充識別，不是帳號登入金鑰，也不是作者電腦連線資訊。此版以開發人員模式安裝，尚未發布 Chrome 線上應用程式商店。
+
+![Chrome 小視窗與模型選單](docs/chrome-popup.png)
+
+## Firefox 安裝（Windows）
 
 需要 Firefox 154+、Node.js 22+，以及至少一個所選工具：Codex、Gemini CLI 或 Claude Code。帳號與可用模型依各工具的方案限制。
 
@@ -55,7 +75,7 @@ Codex 與 Claude 的不保存模式，和 Gemini 的「暫存後清理」有差�
    powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
    ```
 
-   從原始碼安裝時改用 `.\native-chatgpt\install.ps1`。可用 `-CodexPath`、`-ClaudePath`、`-GeminiPath` 指定自己的工具完整路徑；Gemini 也支援直接指定套件的 JavaScript 入口。Node.js 可用 `-NodePath` 指定。更新此版本時也要更新橋接來源並重跑安裝程式。
+   從原始碼安裝時改用 `.\native-chatgpt\install.ps1`。可加 `-Browser Firefox` 只註冊 Firefox；不指定時支援兩種瀏覽器。可用 `-CodexPath`、`-ClaudePath`、`-GeminiPath` 指定自己的工具完整路徑；Gemini 也支援套件的 JavaScript 入口。Node.js 可用 `-NodePath` 指定。更新此版本時也要更新橋接來源並重跑安裝程式。
 
 4. Firefox 開啟 `about:debugging#/runtime/this-firefox`，選「載入暫用附加元件」，載入擴充 ZIP 解壓縮後的 `manifest.json`。
 5. 在小視窗選擇服務及模型；按「偵測／連結」前往設定。先按「偵測本機工具」，找到工具後再按「連結帳號」：Codex 使用 `codex login`；Claude 使用 `claude auth login`；Gemini 在互動視窗選 `Login with Google`。偵測與開啟登入視窗都不等於帳號已通過驗證；只有手動按「測試服務」才送出短句驗證，並使用少量額度。
@@ -73,7 +93,7 @@ Codex 與 Claude 的不保存模式，和 Gemini 的「暫存後清理」有差�
 
 - `No such native application`：重新執行橋接的 `repair.cmd` 或 `install.ps1`，完整退出並重開 Firefox，重新載入暫用擴充，再重新整理頁面。
 - 移動橋接資料夾或更新 Codex 後找不到程式：重新執行安裝程式，依新本機位置產生設定。
-- 移除：在原橋接資料夾執行 `uninstall.ps1`，再卸載暫用擴充。只移除對應橋接登錄，不刪除 Codex 登入或聊天。
+- 移除：在原橋接資料夾執行 `uninstall.ps1`，再卸載擴充。可加 `-Browser Chrome` 或 `-Browser Firefox` 只移除對應瀏覽器註冊；只移除路徑相符的本次安裝，不刪除帳號登入或聊天。
 - 不要複製別人的 `bridge.config.json`、產生的主機 JSON 或 Codex 登入檔；請在自己的電腦重新執行安裝程式。
 
 ## 從原始碼建置
@@ -84,10 +104,11 @@ npm run typecheck
 npm test
 npm run test:native
 npm run build:firefox:codex
+npm run build:chrome:codex
 npm run package:codex
 ```
 
-擴充輸出位於 `dist-firefox-chatgpt/`，發布 ZIP 位於 `artifacts/`。建置不需要 ChatGPT 或 GitHub 登入，也不需要 API 金鑰。詳見[公開版開發說明](docs/codex-development.md)。
+擴充輸出位於 `dist-chrome-chatgpt/` 與 `dist-firefox-chatgpt/`，發布 ZIP 位於 `artifacts/`。建置不需要帳號登入或 API 金鑰。詳見[公開版開發說明](docs/codex-development.md)。
 
 ## 來源與授權
 

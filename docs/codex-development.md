@@ -1,8 +1,12 @@
-# Firefox Codex 公開版開發
+# Chrome／Firefox 帳號翻譯公開版開發
 
-需要 Node.js 22+、npm 與 Python 3。先 `npm ci`，再 `npm run build:firefox:codex`。原始碼、根套件及 Manifest 版本一致，公開版使用通用識別碼。
+需要 Node.js 22+、npm 與 Python 3。先 `npm ci`，再執行 `npm run build:chrome:codex` 與 `npm run build:firefox:codex`。原始碼、根套件及 Manifest 版本一致，公開版使用固定識別碼。
 
-`npm run package:codex` 產生擴充、Windows 橋接與來源三個 ZIP：Firefox 擴充 ZIP 以單一 `manifest.json` 為根；橋接 ZIP 只收錄固定的程式來源、結構定義及安裝說明，不包含產生的執行檔或機器設定。發布前檢查公開內容；擴充 ZIP 必須小於 10,000,000 bytes。
+`npm run package:codex` 產生 Chrome、Firefox、Windows 橋接與來源四個 ZIP。各擴充 ZIP 以單一 `manifest.json` 為根，必須小於 10,000,000 bytes；橋接 ZIP 只收錄來源、結構定義、Chrome 公開識別資料及安裝說明，不包含產生的執行檔或機器設定。
+
+Chrome 模式是 `chrome-chatgpt`，輸出 `dist-chrome-chatgpt/`；保留 module service worker 與 offscreen，加入 nativeMessaging 及固定公開金鑰。Firefox 輸出 `dist-firefox-chatgpt/`，使用 Gecko 識別碼和背景 scripts；兩者共用繁體介面、帳號模型設定與紀錄政策。識別資料在 `native-chatgpt/chrome-extension.json`，Chrome ID 由公開金鑰 DER 的 SHA-256 前 16 bytes 映射為 a–p，測試會核對，不可重新產生識別碼。
+
+`scripts/test-chrome-accounts.mjs` 使用 `CHROME_TEST_BROWSER` 指定的 Chrome for Testing／Chromium 執行檔及隔離設定檔，驗證三服務模型保存、實際工具列小視窗、懸浮球與 YouTube 按鈕。測試攔截本機工具呼叫，使用本機頁面與攔截回應，不連結或翻譯任何真實帳號。Windows `scripts/test-native-install.py` 僅產生臨時安裝檔，驗證兩種瀏覽器清單及原生封包，不寫登錄或讀登入檔。
 
 `npm run check:public` 檢查來源；`npm run typecheck`、`npm test` 及 `npm run test:native` 驗證型別、擴充與本機主機行為。原生主機測試使用模擬程序，不需 ChatGPT 登入，也不呼叫雲端模型。
 

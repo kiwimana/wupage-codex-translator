@@ -11,9 +11,9 @@ import subprocess
 import zipfile
 
 IGNORED = {'.git', 'node_modules', '.npm-cache', 'artifacts', '__pycache__',
-           'dist', 'dist-firefox', 'dist-firefox-chatgpt', 'dist-video-preview'}
+           'dist', 'dist-firefox', 'dist-firefox-chatgpt', 'dist-chrome-chatgpt', 'dist-video-preview'}
 PRIVATE_NAMES = {'auth.json', 'credentials.json', '.credentials.json', 'oauth_creds.json', 'google_accounts.json', 'logins.json', 'prefs.js', 'config.toml', 'bridge.config.json',
-                 'org.wupage.codex_bridge.json', 'wupage-chatgpt-host.exe'}
+                 'org.wupage.codex_bridge.json', 'org.wupage.codex_bridge.chrome.json', 'wupage-chatgpt-host.exe'}
 PRIVATE_PARTS = {'.codex', '.ssh', '.aws', 'browser-profile', 'sessionstore-backups'} | IGNORED
 RULES = {
     'personal-windows-path': re.compile(rb'[A-Za-z]:[\\/]+Users[\\/]+[^\s"\x00]+', re.I),
@@ -58,7 +58,7 @@ def check_source(root):
             findings.extend(check_bytes(name, path.read_bytes()))
     return findings, len(paths)
 
-def check_zip(path, extension=False):
+def check_zip(path, extension=False, browser='firefox'):
     findings = []
     with zipfile.ZipFile(path) as archive:
         names = archive.namelist()
@@ -75,8 +75,14 @@ def check_zip(path, extension=False):
                 findings.append((Path(path).name, 'single-root-manifest-required'))
             else:
                 manifest = json.loads(archive.read('manifest.json'))
-                if manifest.get('browser_specific_settings', {}).get('gecko', {}).get('id') != 'codex-translator@wupage.local':
+                if browser == 'firefox' and manifest.get('browser_specific_settings', {}).get('gecko', {}).get('id') != 'codex-translator@wupage.local':
                     findings.append(('manifest.json', 'unexpected-extension-id'))
+                if browser == 'chrome':
+                    identity = json.loads((Path(__file__).resolve().parent.parent / 'native-chatgpt/chrome-extension.json').read_text(encoding='utf-8'))
+                    if manifest.get('key') != identity['key'] or 'browser_specific_settings' in manifest:
+                        findings.append(('manifest.json', 'unexpected-chrome-identity'))
+                    if manifest.get('background') != {'service_worker': 'background.js', 'type': 'module'} or 'nativeMessaging' not in manifest.get('permissions', []):
+                        findings.append(('manifest.json', 'invalid-chrome-account-manifest'))
             if Path(path).stat().st_size >= 10_000_000:
                 findings.append((Path(path).name, 'extension-too-large'))
     return findings, len(names)
@@ -86,6 +92,7 @@ def main():
     parser.add_argument('--source', type=Path)
     parser.add_argument('--zip', type=Path, action='append', default=[])
     parser.add_argument('--extension', action='store_true')
+    parser.add_argument('--browser', choices=['firefox', 'chrome'], default='firefox')
     args = parser.parse_args()
     if not args.source and not args.zip:
         parser.error('Specify --source or --zip')
@@ -95,7 +102,7 @@ def main():
         found, scanned = check_source(args.source)
         findings.extend(found); count += scanned
     for archive in args.zip:
-        found, scanned = check_zip(archive, args.extension)
+        found, scanned = check_zip(archive, args.extension, args.browser)
         findings.extend(found); count += scanned
     print(json.dumps({'passed': not findings, 'files_scanned': count,
                       'findings': [{'file': f, 'rule': r} for f, r in findings]}, ensure_ascii=False))

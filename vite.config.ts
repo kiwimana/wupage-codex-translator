@@ -5,14 +5,14 @@ import { defineConfig } from "vite";
 import manifest from "./public/manifest.json";
 import { browserManifest } from "./build/manifest";
 import { verifyOcrRuntime } from "./build/ocr/verify";
-import { CHATGPT_EXTENSION_ID } from "./src/shared/chatgpt-build";
+import { accountManifest } from "./build/account-manifest";
 import { traditionalUiEsbuildPlugin, traditionalUiVitePlugin } from "./build/traditional-ui";
 
 export default defineConfig(({ mode }) => {
-  const chatgpt = mode === "firefox-chatgpt";
-  const firefox = mode === "firefox" || chatgpt;
+  const chatgpt = mode === "firefox-chatgpt" || mode === "chrome-chatgpt";
+  const firefox = mode === "firefox" || mode === "firefox-chatgpt";
   const videoPreview = mode === "video-preview";
-  const outDir = chatgpt ? "dist-firefox-chatgpt" : videoPreview ? "dist-video-preview" : firefox ? "dist-firefox" : "dist";
+  const outDir = chatgpt ? (firefox ? "dist-firefox-chatgpt" : "dist-chrome-chatgpt") : videoPreview ? "dist-video-preview" : firefox ? "dist-firefox" : "dist";
   const target = firefox ? "firefox154" : "chrome120";
   const sourcemap = process.env.WUPAGE_SOURCEMAP === "1";
   const define = { __WUPAGE_CHATGPT__: JSON.stringify(chatgpt) };
@@ -26,11 +26,7 @@ export default defineConfig(({ mode }) => {
         // Manifest content scripts are classic scripts. Bundle them independently
         // so shared helpers cannot introduce Rollup's module imports into content.js.
         const generated = browserManifest(manifest, firefox);
-        const extensionManifest = chatgpt ? { ...generated, name: "WuPage ChatGPT 翻譯", version: manifest.version,
-          permissions: [...generated.permissions, "nativeMessaging"],
-          action: { ...manifest.action, default_title: "WuPage ChatGPT 翻譯" },
-          browser_specific_settings: { gecko: { ...generated.browser_specific_settings!.gecko, id: CHATGPT_EXTENSION_ID } }
-        } : videoPreview ? { ...generated,
+        const extensionManifest = chatgpt ? accountManifest(manifest, firefox) : videoPreview ? { ...generated,
           name: "WuPage 视频字幕预览版", version_name: `${manifest.version}-video-preview.9`,
           action: { ...manifest.action, default_title: "WuPage 视频字幕预览版" }
         } : generated;

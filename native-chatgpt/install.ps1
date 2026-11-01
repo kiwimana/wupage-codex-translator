@@ -1,4 +1,4 @@
-param([switch]$PrepareOnly, [string]$CodexPath, [string]$ClaudePath, [string]$GeminiPath, [string]$NodePath)
+param([switch]$PrepareOnly, [ValidateSet('Firefox','Chrome','Both')][string]$Browser='Both', [string]$CodexPath, [string]$ClaudePath, [string]$GeminiPath, [string]$NodePath)
 $ErrorActionPreference = 'Stop'
 $bridgeDirectory = [System.IO.Path]::GetFullPath($PSScriptRoot)
 $previousConfig = $null
@@ -53,25 +53,38 @@ $manifest = @{ name = 'org.wupage.codex_bridge'; description = 'WuPage ChatGPT a
   path = $launcher; type = 'stdio'; allowed_extensions = @('codex-translator@wupage.local') }
 $manifestFile = Join-Path $bridgeDirectory 'org.wupage.codex_bridge.json'
 [System.IO.File]::WriteAllText($manifestFile, ($manifest | ConvertTo-Json), $utf8)
+$chromeIdentity = Get-Content -LiteralPath (Join-Path $bridgeDirectory 'chrome-extension.json') -Raw | ConvertFrom-Json
+if ($chromeIdentity.extensionId -notmatch '^[a-p]{32}$') { throw 'Invalid Chrome extension identity.' }
+$chromeOrigin = 'chrome-extension://' + $chromeIdentity.extensionId + '/'
+$chromeManifest = @{ name = $manifest.name; description = 'WuPage local account translation'; path = $launcher; type = 'stdio'; allowed_origins = @($chromeOrigin) }
+$chromeManifestFile = Join-Path $bridgeDirectory 'org.wupage.codex_bridge.chrome.json'
+[System.IO.File]::WriteAllText($chromeManifestFile, ($chromeManifest | ConvertTo-Json), $utf8)
 if ($PrepareOnly) { Write-Output 'Prepared bridge configuration and executable; registry unchanged.'; exit 0 }
-$registryView = if ([Environment]::Is64BitOperatingSystem) { [Microsoft.Win32.RegistryView]::Registry64 } else { [Microsoft.Win32.RegistryView]::Registry32 }
-$registryRoot = [Microsoft.Win32.RegistryKey]::OpenBaseKey([Microsoft.Win32.RegistryHive]::CurrentUser, $registryView)
-try {
-  $registryPath = 'Software\Mozilla\NativeMessagingHosts\org.wupage.codex_bridge'
-  $registryHost = $registryRoot.CreateSubKey($registryPath)
+$targets = @()
+if ($Browser -in @('Firefox','Both')) { $targets += @{ Path = 'Software\Mozilla\NativeMessagingHosts\org.wupage.codex_bridge'; Manifest = $manifestFile; Allowed = 'allowed_extensions'; Identity = 'codex-translator@wupage.local' } }
+if ($Browser -in @('Chrome','Both')) { $targets += @{ Path = 'Software\Google\Chrome\NativeMessagingHosts\org.wupage.codex_bridge'; Manifest = $chromeManifestFile; Allowed = 'allowed_origins'; Identity = $chromeOrigin } }
+$views = @([Microsoft.Win32.RegistryView]::Registry32)
+if ([Environment]::Is64BitOperatingSystem) { $views += [Microsoft.Win32.RegistryView]::Registry64 }
+foreach ($view in $views) {
+  $registryRoot = [Microsoft.Win32.RegistryKey]::OpenBaseKey([Microsoft.Win32.RegistryHive]::CurrentUser, $view)
   try {
-    $existingManifest = $registryHost.GetValue('')
-    if ($existingManifest -and $existingManifest -ne $manifestFile -and (Test-Path -LiteralPath $existingManifest)) {
-      $existingHost = Get-Content -LiteralPath $existingManifest -Raw | ConvertFrom-Json
-      if ($existingHost.name -ne $manifest.name -or 'codex-translator@wupage.local' -notin $existingHost.allowed_extensions) {
-        throw 'This host name belongs to another application. Its registration was not changed.'
-      }
+    foreach ($target in $targets) {
+      $registryHost = $registryRoot.CreateSubKey($target.Path)
+      try {
+        $existingManifest = $registryHost.GetValue('')
+        if ($existingManifest -and $existingManifest -ne $target.Manifest -and (Test-Path -LiteralPath $existingManifest)) {
+          $existingHost = Get-Content -LiteralPath $existingManifest -Raw | ConvertFrom-Json
+          if ($existingHost.name -ne $manifest.name -or $target.Identity -notin $existingHost.($target.Allowed)) {
+            throw 'This host name belongs to another application. Its registration was not changed.'
+          }
+        }
+        $registryHost.SetValue('', $target.Manifest, [Microsoft.Win32.RegistryValueKind]::String)
+        $registryHost.Flush()
+        if ($registryHost.GetValue('') -ne $target.Manifest) { throw 'Native host registry verification failed.' }
+      } finally { $registryHost.Dispose() }
     }
-    $registryHost.SetValue('', $manifestFile, [Microsoft.Win32.RegistryValueKind]::String)
-    $registryHost.Flush()
-    if ($registryHost.GetValue('') -ne $manifestFile) { throw 'Native host registry verification failed.' }
-  } finally { $registryHost.Dispose() }
-} finally { $registryRoot.Dispose() }
+  } finally { $registryRoot.Dispose() }
+}
 Write-Output 'Installed WuPage native bridge for the current Windows user. No background service was started.'
 Write-Output 'Verified the native manifest path and the current-user registry entry.'
-Write-Output 'If Firefox reported No such native application, fully exit Firefox and open it again, reload the temporary extension, then refresh the page.'
+Write-Output "Registered for $Browser. If the host was missing, restart that browser and reload the extension."

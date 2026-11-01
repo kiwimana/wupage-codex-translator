@@ -12,6 +12,7 @@ class PublicPackageTest(unittest.TestCase):
     def test_generated_machine_configuration_cannot_be_published(self):
         self.assertTrue(guard.check_bytes('native-chatgpt/bridge.config.json', b'{}'))
         self.assertTrue(guard.check_bytes('native-chatgpt/org.wupage.codex_bridge.json', b'{}'))
+        self.assertTrue(guard.check_bytes('native-chatgpt/org.wupage.codex_bridge.chrome.json', b'{}'))
         self.assertTrue(guard.check_bytes('.codex/auth.json', b'{}'))
         self.assertTrue(guard.check_bytes('browser/logins.json', b'{}'))
         self.assertTrue(guard.check_bytes('browser/cookies.sqlite', b'data'))

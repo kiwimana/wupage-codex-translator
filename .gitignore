@@ -2,6 +2,7 @@ node_modules/
 dist/
 dist-firefox/
 dist-firefox-chatgpt/
+dist-chrome-chatgpt/
 dist-video-preview/
 .env
 .DS_Store
@@ -29,4 +30,5 @@ config.toml
 *.jsonl
 native-chatgpt/bridge.config.json
 native-chatgpt/org.wupage.codex_bridge.json
+native-chatgpt/org.wupage.codex_bridge.chrome.json
 native-chatgpt/wupage-chatgpt-host.exe

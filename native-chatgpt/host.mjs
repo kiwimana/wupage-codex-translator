@@ -3,9 +3,12 @@ import path from 'node:path';
 import os from 'node:os';
 import { spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import chromeIdentity from './chrome-extension.json' with { type: 'json' };
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 export const extensionId = 'codex-translator@wupage.local';
+export const chromeOrigin = `chrome-extension://${chromeIdentity.extensionId}/`;
+export function allowedBrowser(args) { return args.includes(extensionId) || args.includes(chromeOrigin); }
 
 export function validateRequest(input) {
   if (!input || input.type !== 'translate' || !Array.isArray(input.texts)
@@ -189,7 +192,7 @@ export async function manageAccount(input, signal, run = runProcess, directory =
 }
 
 export async function main() {
-  if (!process.argv.includes(extensionId)) return;
+  if (!allowedBrowser(process.argv)) return;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(new Error('翻譯逾時。')), 175000);
   process.stdin.once('end', () => controller.abort(new Error('翻譯已取消。')));

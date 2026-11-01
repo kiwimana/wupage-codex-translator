@@ -1,4 +1,8 @@
-v1.7.0 新增 Codex、Gemini CLI、Claude Code 帳號選擇及各服務獨立的模型設定。小視窗可快速選模型；設定頁可選「自動」、預設模型或新增完整模型名稱。網頁、PDF 與 AI CC 字幕採用所選帳號與模型。
+v1.8.0 新增 Chrome 帳號翻譯版，同時保留 Firefox 版。Chrome 與 Firefox 共用繁體中文介面、懸浮球、Codex／Gemini CLI／Claude Code 模型選擇、手動偵測與連結，以及 YouTube AI CC 字幕載入提示。
+
+Chrome 下載 `chrome.zip` 與 `windows-bridge.zip`，分別解壓縮；在 `chrome://extensions` 開啟開發人員模式，選「載入未封裝項目」，再於橋接資料夾執行 `install.ps1 -Browser Chrome`。尚未發布 Chrome 線上應用程式商店。完整操作見 [Chrome 安裝說明](https://github.com/kiwimana/wupage-codex-translator#chrome-安裝windows)。
+
+Chrome 使用固定公開金鑰維持擴充識別碼，橋接只允許本擴充的精確來源。公開包不含私鑰、登入資料或作者機器設定；只連到安裝者自己的本機工具。Windows 安裝程式支援 `-Browser Chrome`、`Firefox` 或 `Both`，分別註冊，解除安裝只移除本次安裝路徑相符的項目。
 
 **翻譯使用獨立臨時工作，不保留一般本機聊天紀錄，也不續接原有聊天室。** Codex 使用 `--ephemeral`，Claude 使用 `--no-session-persistence`；Gemini 是獨立暫存後清理，執行期間可能寫入對話檔，強制終止可能留下暫存。這些做法不等於三者都有官方無痕聊天視窗，也不代表服務端零留存。詳見 [README 的紀錄處理說明](https://github.com/kiwimana/wupage-codex-translator#桌面帳號翻譯不保留一般本機聊天紀錄)。
 
@@ -11,6 +15,6 @@ v1.7.0 新增 Codex、Gemini CLI、Claude Code 帳號選擇及各服務獨立的
 - 手動啟動、停用永久本機譯文快取。
 - 公開包不包含登入資料、金鑰或安裝後的機器設定；每位使用者需自行安裝橋接。
 
-下載 **firefox.zip** 與 **windows-bridge.zip**，依 README 安裝。來源 ZIP 可供自行建置。橋接安裝程式目前支援 Windows；Firefox 包尚未經 Mozilla 簽章，暫用擴充在瀏覽器重開後須重新載入。
+依瀏覽器選擇 **chrome.zip** 或 **firefox.zip**，搭配 **windows-bridge.zip**，依 README 安裝。來源 ZIP 可供自行建置。橋接安裝程式目前支援 Windows；Chrome 以開發人員模式載入，Firefox 包尚未經 Mozilla 簽章，暫用擴充在瀏覽器重開後須重新載入。
 
 **雲端翻譯使用安裝者自身所選帳號與模型的額度。** 不保存本機對話不等於服務端零留存。來源與第三方資源歸屬見 UPSTREAM.md。

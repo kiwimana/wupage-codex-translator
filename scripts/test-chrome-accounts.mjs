@@ -1,0 +1,80 @@
+// Isolated Chrome/Chromium profile. No login, detection or real AI translation.
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import {spawn} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
+import {createServer} from 'node:http';
+import {setTimeout as delay} from 'node:timers/promises';
+const root=fileURLToPath(new URL('..',import.meta.url));
+const output=path.join(root,'.npm-cache/chrome-accounts');await fs.mkdir(output,{recursive:true});
+const identity=JSON.parse(await fs.readFile(path.join(root,'native-chatgpt/chrome-extension.json'),'utf8'));
+const base=`chrome-extension://${identity.extensionId}/`;
+const binary=process.env.CHROME_TEST_BROWSER||path.join(root,'.npm-cache/chrome-test/chrome-win64/chrome.exe');
+const profile=await fs.mkdtemp(path.join(output,'profile-'));
+const report={passed:false,checks:[]};let browser,socket,serial=0;const pending=new Map(),listeners=new Map();
+const server=createServer((_q,r)=>r.writeHead(200,{'content-type':'text/html;charset=utf-8'}).end('<!doctype html><meta charset="utf-8"><p>Manual translation only.</p>'));
+await new Promise(r=>server.listen(0,'127.0.0.1',r));const fixture=`http://127.0.0.1:${server.address().port}/`;
+function send(method,params={},sessionId){return new Promise((resolve,reject)=>{const id=++serial,timer=setTimeout(()=>{pending.delete(id);reject(new Error('CDP timed out: '+method));},20000);pending.set(id,{resolve,reject,timer});socket.send(JSON.stringify({id,method,params,...(sessionId?{sessionId}:{})}));});}
+async function evaluate(sessionId,expression){const r=await send('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true},sessionId);if(r.exceptionDetails)throw new Error(JSON.stringify(r.exceptionDetails));return r.result.value;}
+async function waitFor(read){for(let i=0;i<150;i++){const value=await read();if(value)return value;await delay(100);}throw new Error('Chrome UI did not settle');}
+async function attach(targetId){const {sessionId}=await send('Target.attachToTarget',{targetId,flatten:true});await send('Runtime.enable',{},sessionId);return sessionId;}
+async function page(url){const {targetId}=await send('Target.createTarget',{url});const session=await attach(targetId);return {targetId,session};}
+const check=name=>report.checks.push(name);
+try{
+ browser=spawn(binary,['--headless=new','--screen-info={1600x1200}','--window-size=1400,1000','--no-first-run','--no-default-browser-check','--disable-background-networking','--remote-debugging-port=0','--enable-unsafe-extension-debugging',`--user-data-dir=${profile}`,'about:blank'],{windowsHide:true,stdio:['ignore','pipe','pipe']});
+ let launchLog='';browser.stderr.on('data',b=>{launchLog=(launchLog+b).slice(-6000);});browser.stdout.on('data',()=>{});let launchError;browser.on('error',e=>{launchError=e;});
+ const port=await waitFor(async()=>{if(launchError)throw launchError;if(browser.exitCode!==null)throw new Error(launchLog);try{return (await fs.readFile(path.join(profile,'DevToolsActivePort'),'utf8')).split('\n')[0];}catch{return false;}});
+ const version=await(await fetch(`http://127.0.0.1:${port}/json/version`)).json();report.browser=version.Browser;
+ socket=new WebSocket(version.webSocketDebuggerUrl);await new Promise((resolve,reject)=>{socket.addEventListener('open',resolve,{once:true});socket.addEventListener('error',reject,{once:true});});
+ socket.addEventListener('message',event=>{const value=JSON.parse(String(event.data));if(value.id){const task=pending.get(value.id);if(!task)return;pending.delete(value.id);clearTimeout(task.timer);if(value.error)task.reject(new Error(JSON.stringify(value.error)));else task.resolve(value.result);}else for(const handler of listeners.get(value.method)||[])handler(value);});
+ const loaded=await send('Extensions.loadUnpacked',{path:path.join(root,'dist-chrome-chatgpt')});assert.equal(loaded.id,identity.extensionId);
+ const worker=await waitFor(async()=>{const {targetInfos}=await send('Target.getTargets');return targetInfos.find(t=>t.type==='service_worker'&&t.url.startsWith(base));});
+ const workerSession=await attach(worker.targetId);
+ await waitFor(()=>evaluate(workerSession,`typeof chrome!=='undefined'&&!!chrome.runtime?.connectNative`));
+ await evaluate(workerSession,`globalThis.__accountTestNativeCalls=0;chrome.runtime.connectNative=()=>{globalThis.__accountTestNativeCalls++;throw new Error('Native calls disabled in UI test');};true`);
+ const options=await page(base+'options.html');
+ await waitFor(()=>evaluate(options.session,`document.querySelector('#providerForm')?.dataset.providerId==='chatgpt-desktop'`));
+ const manifest=await evaluate(options.session,`chrome.runtime.getManifest()`);assert.ok(manifest.permissions.includes('nativeMessaging'));assert.equal(manifest.background.service_worker,'background.js');assert.equal(manifest.browser_specific_settings,undefined);
+ check('Chrome loads the MV3 account extension with its fixed public identity and module service worker');
+ const api=script=>evaluate(options.session,`(async()=>{${script}})()`);
+ const current=await api(`return (await chrome.runtime.sendMessage({type:'GET_SETTINGS'})).data;`);assert.equal(current.cacheEnabled,false);assert.equal(current.autoTranslation.enabled,false);
+ for(const [id,model] of [['chatgpt-desktop','gpt-6-luna'],['gemini-desktop','flash'],['claude-desktop','haiku']]){
+  await evaluate(options.session,`document.querySelector('#providerTrigger').click();document.querySelector('[data-action="select"][data-provider-id="${id}"]').click();true`);
+  await waitFor(()=>evaluate(options.session,`document.querySelector('#providerForm')?.dataset.providerId==='${id}'`));
+  const state=await evaluate(options.session,`(()=>{const m=document.querySelector('#providerModel');return {automatic:m.options[0].textContent,status:document.querySelector('[data-role="desktop-account-status"]').textContent,connectDisabled:document.querySelector('[data-action="desktop-connect"]').disabled};})()`);
+  assert.ok(state.automatic.includes('自動'));assert.ok(state.status.includes('尚未偵測'));assert.equal(state.connectDisabled,true);
+  await evaluate(options.session,`document.querySelector('#providerModel').value='${model}';document.querySelector('#providerModel').dispatchEvent(new Event('change',{bubbles:true}));document.querySelector('#save').click();true`);
+  await waitFor(()=>api(`return (await chrome.runtime.sendMessage({type:'GET_SETTINGS'})).data.providers.find(p=>p.id==='${id}').model==='${model}';`));
+  check(`${id}: model saved with manual-only detection and connection`);
+ }
+ const content=await page(fixture);await waitFor(()=>evaluate(content.session,`document.querySelector('#wupage-floating-hitbox')?.hidden===false`));
+ const tabId=await api(`return (await chrome.tabs.query({})).find(t=>t.url===${JSON.stringify(fixture)}).id;`);
+ await api(`await chrome.tabs.update(${tabId},{active:true});await chrome.action.openPopup();return true;`);
+ const popupTarget=await waitFor(async()=>{const {targetInfos}=await send('Target.getTargets');return targetInfos.find(t=>t.url===base+'popup.html');});
+ const popup=await attach(popupTarget.targetId);await waitFor(()=>evaluate(popup,`document.querySelector('#desktopModel')?.value==='haiku'`));
+ const popupState=await evaluate(popup,`(()=>{const p=document.querySelector('.popup');return {label:document.querySelector('.wupage-provider-name').textContent,mainHeight:p.scrollHeight,clientHeight:p.clientHeight,viewport:innerHeight,horizontal:p.scrollWidth>p.clientWidth};})()`);
+ assert.ok(popupState.label.includes('Claude'));assert.equal(popupState.horizontal,false);assert.ok(popupState.mainHeight<=popupState.clientHeight+1&&popupState.mainHeight<=popupState.viewport+1,JSON.stringify(popupState));
+ await evaluate(popup,`document.querySelector('#desktopModel').value='sonnet';document.querySelector('#desktopModel').dispatchEvent(new Event('change',{bubbles:true}));true`);await delay(250);
+ const shot=await send('Page.captureScreenshot',{format:'png',clip:{x:0,y:0,width:352,height:popupState.clientHeight,scale:1}},popup);await fs.writeFile(path.join(output,'chrome-popup.png'),Buffer.from(shot.data,'base64'));
+ await send('Target.closeTarget',{targetId:popupTarget.targetId});
+ assert.equal(await api(`return (await chrome.runtime.sendMessage({type:'GET_SETTINGS'})).data.providers.find(p=>p.id==='claude-desktop').model;`),'sonnet');
+ check('actual Chrome toolbar popup saves the model and shows all controls without clipping');
+ const video=await page('about:blank');await send('Page.enable',{},video.session);await send('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'no-preference'}]},video.session);await send('Fetch.enable',{patterns:[{urlPattern:'https://www.youtube.com/*',requestStage:'Request'}]},video.session);
+ const videoHtml=`<!doctype html><style>#movie_player{position:relative;width:900px;height:506px}video{width:100%;height:100%}.ytp-right-controls{position:absolute;bottom:0;right:0;display:flex;height:48px}.ytp-button{height:48px}</style><div id="movie_player"><video muted playsinline></video><div class="ytp-right-controls"><button class="ytp-subtitles-button">CC</button><button class="ytp-settings-button">Settings</button></div></div><script>const c=document.createElement('canvas');c.width=900;c.height=506;document.querySelector('video').srcObject=c.captureStream(1);setInterval(()=>c.getContext('2d').fillRect(0,0,900,506),100);</script>`;
+ listeners.set('Fetch.requestPaused',[event=>{if(event.sessionId===video.session)void send('Fetch.fulfillRequest',{requestId:event.params.requestId,responseCode:200,responseHeaders:[{name:'Content-Type',value:'text/html;charset=utf-8'}],body:Buffer.from(videoHtml).toString('base64')},video.session);}]);
+ await send('Page.navigate',{url:'https://www.youtube.com/watch?v=local-fixture'},video.session);
+ await waitFor(()=>evaluate(video.session,`!!document.querySelector('.wupage-ai-cc-button')`));
+ const control=await evaluate(video.session,`(()=>{const b=document.querySelector('.wupage-ai-cc-button');b.setAttribute('aria-busy','true');return {next:b.nextElementSibling.className,animation:getComputedStyle(b,'::before').animationName};})()`);
+ assert.equal(control.next,'ytp-settings-button');assert.equal(control.animation,'wupage-ai-cc-spin');
+ check('YouTube player AI button is mounted before Settings and its loading circle renders in Chrome');
+ assert.equal(await evaluate(workerSession,'globalThis.__accountTestNativeCalls'),0);
+ assert.equal((await api(`return (await chrome.runtime.sendMessage({type:'GET_TRANSLATION_DEBUG'})).data;`)).tasks.length,0);
+ report.nativeCalls=0;report.translationRequests=0;report.loginActions=0;report.passed=true;console.log(JSON.stringify(report));
+}catch(error){report.error=String(error);throw error;}
+finally{
+ if(socket){try{await send('Browser.close');}catch{}socket.close();}
+ for(const task of pending.values()){clearTimeout(task.timer);task.reject(new Error('Test closed'));}pending.clear();
+ if(browser&&browser.exitCode===null)browser.kill();
+ await new Promise(r=>server.close(r));await fs.writeFile(path.join(output,'report.json'),JSON.stringify(report,null,2));
+}

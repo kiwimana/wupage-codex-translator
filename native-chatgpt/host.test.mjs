@@ -3,7 +3,13 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { accountEnvironment, claudeArguments, codexArguments, encodeMessage, manageAccount, runGemini, runProcess, translate, validateRequest } from './host.mjs';
+import { accountEnvironment, allowedBrowser, chromeOrigin, claudeArguments, codexArguments, encodeMessage, extensionId, manageAccount, runGemini, runProcess, translate, validateRequest } from './host.mjs';
+
+test('accepts only this Firefox extension or the exact fixed Chrome origin', () => {
+  assert.equal(allowedBrowser([extensionId]), true);
+  assert.equal(allowedBrowser([chromeOrigin, '--parent-window=0']), true);
+  for (const args of [[], ['other@example.test'], ['chrome-extension://'+'a'.repeat(32)+'/'], [chromeOrigin+'attacker'], [chromeOrigin.replace('chrome-extension:', 'https:')]]) assert.equal(allowedBrowser(args), false);
+});
 
 test('ephemeral execution has no response file, shell tool, plugins or agent delegation', () => {
   const args = codexArguments('/example');

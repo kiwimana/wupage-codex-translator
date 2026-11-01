@@ -12,6 +12,10 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 
 可用 `-CodexPath`、`-ClaudePath`、`-GeminiPath`、`-NodePath` 指定自己的完整路徑；Gemini 也支援官方 npm 套件的 JavaScript 入口。安裝程式在目前資料夾產生 `bridge.config.json`、`org.wupage.codex_bridge.json` 及啟動器，並登錄目前 Windows 使用者的原生主機。產生檔不得提交或轉給別人。安裝程式不安裝工具或登入帳號。
 
+Chrome 安裝時使用 `install.ps1 -Browser Chrome`，Firefox 可用 `-Browser Firefox`；不指定時註冊兩者。Chrome 使用獨立產生的 `org.wupage.codex_bridge.chrome.json`，`allowed_origins` 僅允許 `chrome-extension://lfhpgjnpadlfkafdnbeepfpjhfbdjblb/`。Firefox 清單僅包含 `allowed_extensions`。兩種清單在目前使用者的各瀏覽器登錄位置註冊，支援 32／64 位元瀏覽器。
+
+隨包的 `chrome-extension.json` 只有固定擴充識別碼與公開金鑰，不包含私鑰或帳號登入內容，不應刪除或重新產生。更新橋接時須一併保留此檔案。Chrome 的擴充以「載入未封裝項目」載入，並保留 Manifest 的 `key`。
+
 擴充識別碼為 `codex-translator@wupage.local`，主機名稱為 `org.wupage.codex_bridge`。名稱只用於 Firefox 本機原生訊息，不是網路位址。沒有常駐服務、遠端連線或對外開放的埠。
 
 設定頁「偵測本機工具」只檢查安裝檔，不啟動工具、不讀取登入內容、不送出翻譯，也不宣稱帳號已驗證。使用者另按「連結帳號」才透過 `connect.ps1` 開啟官方登入：Codex 使用 `codex login`，Claude 使用 `claude auth login`，Gemini 選 `Login with Google`。桌面聊天程式的登入不一定共用。手動按「測試服務」才會送出短句驗證，並使用少量額度。
