@@ -2,7 +2,7 @@
 
 繁體中文網頁雙語翻譯擴充套件。按下翻譯後，由**使用者自己電腦上的 Codex**，使用該使用者已登入的 ChatGPT 帳號處理，不需要填入 API 金鑰。
 
-本專案基於 [mr-wuliu/wupage](https://github.com/mr-wuliu/wupage)，加入本機 Codex 橋接、繁體中文介面、紫色明暗主題與 YouTube AI 雙語字幕。不是 OpenAI 或原專案的官方產品。
+這是 [mr-wuliu/wupage](https://github.com/mr-wuliu/wupage) 的非官方衍生 **fork**，保留原作者的提交歷史。`codex-firefox` 是本改版分支，加入本機 Codex 橋接、繁體中文介面、紫色明暗主題與 YouTube AI 雙語字幕；`main` 保留上游版本供後續同步。不是 OpenAI 或原專案的官方產品。
 
 ![明暗介面](docs/ui-preview.png)
 

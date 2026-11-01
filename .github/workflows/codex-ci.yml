@@ -1,7 +1,7 @@
 name: Check public Firefox Codex build
 on:
   push:
-    branches: [main]
+    branches: [main, codex-firefox]
   pull_request:
   workflow_dispatch:
 permissions:
