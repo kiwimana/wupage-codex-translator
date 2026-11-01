@@ -1,5 +1,6 @@
 import type { LocalModel } from "./models";
 import { readLocalModel } from "./model-store";
+import { CHATGPT_BUILD } from "../shared/chatgpt-build";
 
 // Use the upstream worker protocol directly. This avoids its default remote
 // registry/downloader and gives every failed worker call a bounded lifetime.
@@ -45,7 +46,7 @@ export class LocalTranslationEngine {
     // Firefox's offline mode permits extension-page fetches but rejects the
     // worker's first fetch of packaged WASM. Transfer it from this page instead.
     let wasmBinary: ArrayBuffer | undefined;
-    if (import.meta.env.MODE === "firefox") {
+    if (import.meta.env.MODE === "firefox" || CHATGPT_BUILD) {
       const response = await fetch(chrome.runtime.getURL("bergamot-runtime/bergamot-translator-worker.wasm"));
       if (!response.ok) throw new Error("本地翻译运行库读取失败，请重新加载扩展。");
       wasmBinary = await response.arrayBuffer();

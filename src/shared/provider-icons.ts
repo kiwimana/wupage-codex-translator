@@ -25,6 +25,7 @@ export function providerIconMarkup(provider: Pick<ProviderConfig, "type"> | unde
     case "mymemory": icon = "mymemory"; break;
     case "deepseek": icon = "deepseek-color"; break;
     case "zhipu-glm": icon = "zhipu-color"; break;
+    case "chatgpt-desktop":
     case "openai-compatible": icon = "openai"; break;
     case "anthropic-compatible": icon = "anthropic"; break;
     case "firefox-local": icon = "local"; break;

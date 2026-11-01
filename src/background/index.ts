@@ -67,7 +67,7 @@ async function handleMessage(request: RuntimeRequest, sender: chrome.runtime.Mes
     case "CANCEL_VIDEO_SUBTITLES":
       cancelVideo(request, sender); return null;
     case "OPEN_VIDEO_SUBTITLES":
-      return openVideoInTab(request.tabId ?? sender.tab?.id);
+      return openVideoInTab(request.tabId ?? sender.tab?.id, request.action);
     case "LOOKUP_DICTIONARY":
     case "PLAY_DICTIONARY_AUDIO": {
       const settings = normalizeSelectionTranslation((await getSettings()).selectionTranslation);

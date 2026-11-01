@@ -4,6 +4,7 @@ import type { ExtensionSettings } from "../shared/types";
 import { hasPageTranslations } from "./dom";
 import { getPageTranslationState, hidePageTranslation, loadPageTranslationSettings, startPageTranslation, subscribePageTranslationState } from "./page-translation";
 import { sendRuntimeRequest } from "./runtime";
+import { CHATGPT_BUILD } from "../shared/chatgpt-build";
 
 interface AutoTranslationDependencies {
   loadSettings: () => Promise<ExtensionSettings>;
@@ -18,6 +19,7 @@ const OWNED = '.wupage-translation,.wupage-translation-pending,#wupage-floating-
 const SKIP_TEXT = `${OWNED},script,style,noscript,pre,code,textarea,input,select,button,nav,header,footer,aside,[contenteditable="true"],[hidden],[aria-hidden="true"]`;
 
 export function initAutoTranslation(overrides: Partial<AutoTranslationDependencies> = {}): () => void {
+  if (CHATGPT_BUILD) return () => {};
   if (typeof document === "undefined" || typeof window === "undefined" || window.top !== window
     || !/^https?:$/u.test(location.protocol) || !["text/html", "application/xhtml+xml"].includes(document.contentType)) return () => {};
   const deps: AutoTranslationDependencies = {

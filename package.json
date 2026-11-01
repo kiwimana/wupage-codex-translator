@@ -1,6 +1,6 @@
 {
   "name": "wupage",
-  "version": "1.5.5",
+  "version": "1.6.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,7 +10,7 @@
     "dev:firefox": "vite build --mode firefox --watch",
     "test:firefox": "node scripts/test-firefox.mjs",
     "dev": "vite build --watch",
-    "test": "vitest run --exclude \"**/.npm-cache/**\"",
+    "test": "vitest run --exclude \"**/.npm-cache/**\" --exclude \"native-chatgpt/**\"",
     "test:page": "node scripts/test-page-translation.mjs",
     "test:cards": "node scripts/test-card-layout.mjs",
     "test:cards:edge": "node scripts/test-card-layout.mjs --edge",
@@ -77,13 +77,18 @@
     "typecheck": "tsc --noEmit",
     "test:page-scan": "node scripts/test-page-scan.mjs",
     "test:page-scan:edge": "node scripts/test-page-scan.mjs --edge",
-    "test:page-scan:firefox": "node scripts/test-page-scan.mjs --firefox"
+    "test:page-scan:firefox": "node scripts/test-page-scan.mjs --firefox",
+    "build:firefox:codex": "vite build --mode firefox-chatgpt",
+    "test:native": "node --test native-chatgpt/host.test.mjs",
+    "check:public": "python scripts/check-public-package.py --source .",
+    "package:codex": "python scripts/package-codex-release.py"
   },
   "devDependencies": {
     "@types/chrome": "^0.1.34",
     "@types/node": "^24.0.14",
     "esbuild": "0.28.1",
     "jsdom": "^29.1.1",
+    "opencc-js": "1.4.2",
     "typescript": "^5.9.3",
     "vite": "^7.0.5",
     "vitest": "^3.2.4"

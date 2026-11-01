@@ -75,7 +75,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
 
 async function handleMessage(request: RuntimeRequest): Promise<unknown> {
   if (request.type === "OPEN_VIDEO_SUBTITLES") {
-    return openVideoSubtitles();
+    return openVideoSubtitles(request.action);
   }
   if (request.type === "EXECUTE_TRANSLATION_SHORTCUT") {
     await executeTranslationShortcut(request.command);

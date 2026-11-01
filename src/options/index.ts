@@ -1,4 +1,5 @@
 import { BUILT_IN_PROVIDER_IDS, DEFAULT_SETTINGS } from "../shared/defaults";
+import { CHATGPT_BUILD } from "../shared/chatgpt-build";
 import { normalizeFrameTranslation } from "../shared/frame-session";
 import { SOURCE_LANGUAGES, TARGET_LANGUAGES } from "../shared/languages";
 import { TRANSLATION_DISPLAY_MODES } from "../shared/display-modes";
@@ -6,6 +7,7 @@ import { sendRuntimeMessage } from "../shared/messaging";
 import type { DoubaoStatus, ExtensionSettings, ProviderConfig, TranslationApiOptions } from "../shared/types";
 import { supportsServiceMode, translationApiOptions } from "../shared/translation-service";
 import "./styles.css";
+import "./refresh.css";
 import { setImageTranslationToggle, setupOcrControl } from "../shared/ocr-control";
 import { setupLocalModelControl } from "../local/control";
 import { ensureProviderIconStyles, providerIconMarkup } from "../shared/provider-icons";
@@ -186,6 +188,10 @@ function render(): void {
   shortcutControls.render(settings.shortcuts, settings.shortcutEnabled, settings.localShortcuts);
   appearanceControls.render(settings.appearance);
   autoTranslationControls.render(settings.autoTranslation);
+  if (CHATGPT_BUILD) {
+    query<HTMLElement>("#autoTranslationSettings").querySelectorAll<HTMLInputElement | HTMLButtonElement>("input,button,select")
+      .forEach(control => { control.disabled = true; control.title = "此版本只在按下翻譯後執行。"; });
+  }
   const frameTranslation = normalizeFrameTranslation(settings.frameTranslation);
   frameTranslationEnabled.checked = frameTranslation.enabled;
   frameTranslationExcluded.value = frameTranslation.excludeMatches.join("\n");
@@ -197,6 +203,8 @@ function render(): void {
   pdfTranslationPageRadius.value = String(settings.pdfTranslationPageRadius ?? DEFAULT_SETTINGS.pdfTranslationPageRadius);
   updatePdfTranslationScope();
   cacheEnabled.checked = settings.cacheEnabled;
+  cacheEnabled.disabled = CHATGPT_BUILD;
+  if (CHATGPT_BUILD) cacheEnabled.title = "此版本不儲存永久譯文快取。";
   floatingBallEnabled.checked = settings.floatingBallEnabled;
   const selection = normalizeSelectionTranslation(settings.selectionTranslation);
   selectionTranslationEnabled.checked = selection.enabled;
@@ -301,7 +309,9 @@ function renderProviderForm(): void {
   clearTimeout(doubaoRetryTimer);
   disposeLocalControl?.(); disposeLocalControl = undefined;
   const provider = getEditingProvider();
-  providerPerformance.innerHTML = provider.type === "firefox-local"
+  providerPerformance.innerHTML = provider.type === "chatgpt-desktop"
+    ? '<p class="hint">ChatGPT 翻譯固定分塊大小 4000、並發數 1；不保存永久譯文快取。</p>'
+    : provider.type === "firefox-local"
     ? '<p class="hint">本地翻译使用固定分块大小 800、并发数 1。</p>'
     : provider.type === "doubao-web"
       ? '<p class="hint">豆包翻译使用固定分块大小 1200、并发数 1。</p>'
@@ -337,6 +347,14 @@ function renderProviderForm(): void {
         renderDoubaoStatus();
       }).catch(() => { /* Keep the actionable initial state if the background is restarting. */ });
     }
+    return;
+  }
+  if (provider.type === "chatgpt-desktop") {
+    setProviderFormMarkup(provider, `<div class="grid"><label>顯示名稱 <input data-field="label" type="text" value="${escapeAttr(provider.label)}" /></label></div>
+      <p>使用本機已登入 ChatGPT 的 Codex，不需 API 金鑰。請先執行套件附帶的橋接安裝程式。</p>
+      <p>按下翻譯才傳送文字；每批使用臨時工作，不儲存本機對話或永久譯文快取。用量計入 ChatGPT／Codex 方案。這不是 ChatGPT 網頁的「臨時聊天」。</p>
+      <p>適合網頁與文字 PDF；影片即時字幕可能因回應時間較長而逾時。停止後會取消正在進行的本機工作。</p>
+      <button id="test" type="button">測試翻譯（會使用少量額度）</button>`);
     return;
   }
   if (provider.type === "firefox-local") {
@@ -990,7 +1008,7 @@ function readProviderFromForm(provider: ProviderConfig): ProviderConfig {
     return { ...provider, label: field("label").trim() || provider.label,
       serviceMode: field("serviceMode") === "api" ? "api" : "free", api };
   }
-  if (provider.type === "firefox-local" || provider.type === "doubao-web") {
+  if (provider.type === "chatgpt-desktop" || provider.type === "firefox-local" || provider.type === "doubao-web") {
     return { ...provider, label: field("label").trim() || provider.label };
   }
   if (provider.type === "microsoft-translator") {

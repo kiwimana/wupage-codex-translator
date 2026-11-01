@@ -1,3 +1,4 @@
+import { floatingRefreshStyles } from "./floating-refresh";
 const STYLE_ID = "wupage-translation-style";
 
 export function injectContentStyles(): void {
@@ -63,6 +64,28 @@ export function injectContentStyles(): void {
     .wupage-translation[data-wupage-container="youtube-description"]:not([data-wupage-display-mode="replace"])::before {
       content: "\\A";
       white-space: pre;
+    }
+
+    /* YouTube clamps titles to a few lines. Release only translated title
+       fields, and let the site's original layout return when results hide. */
+    :is(ytd-watch-metadata h1, ytd-video-primary-info-renderer h1,
+        ytd-compact-video-renderer #video-title, ytd-video-renderer #video-title,
+        .ytLockupMetadataViewModelTitle, .yt-lockup-metadata-view-model__title,
+        h3:has(> .ytLockupMetadataViewModelTitle)):has(
+          .wupage-translation[data-wupage-container="youtube-title"]:not([data-wupage-display-mode="replace"])) {
+      display: block !important;
+      -webkit-line-clamp: unset !important;
+      line-clamp: unset !important;
+      max-height: none !important;
+      height: auto !important;
+      overflow: visible !important;
+      white-space: normal !important;
+    }
+
+    ytd-text-inline-expander #snippet:has(.wupage-translation:not([data-wupage-display-mode="replace"])) {
+      max-height: none !important;
+      overflow: visible !important;
+      mask-image: none !important;
     }
 
     .wupage-translation[data-wupage-display-mode="replace"] {
@@ -228,14 +251,17 @@ export function injectContentStyles(): void {
       bottom: 88px !important;
       z-index: 2147483647 !important;
       box-sizing: border-box !important;
-      width: 74px !important;
-      height: 74px !important;
+      width: calc(var(--wp-floating-size, 42px) + 2 * var(--wp-floating-padding, 16px)) !important;
+      height: calc(var(--wp-floating-size, 42px) + 2 * var(--wp-floating-padding, 16px)) !important;
       margin: 0 !important;
       padding: 0 !important;
       display: grid !important;
       place-items: center !important;
       transform: none !important;
       pointer-events: auto !important;
+      cursor: pointer !important;
+      touch-action: none !important;
+      user-select: none !important;
     }
 
     #wupage-floating-hitbox[hidden] {
@@ -243,15 +269,15 @@ export function injectContentStyles(): void {
     }
 
     #wupage-floating-hitbox:has(.is-menu-open) {
-      pointer-events: none !important;
+      pointer-events: var(--wp-floating-menu-hitbox-events, none) !important;
     }
 
     #wupage-floating-ball {
       all: initial;
       position: relative;
       box-sizing: border-box;
-      width: 42px;
-      height: 42px;
+      width: var(--wp-floating-size, 42px);
+      height: var(--wp-floating-size, 42px);
       min-width: 0;
       min-height: 0;
       margin: 0;
@@ -327,12 +353,12 @@ export function injectContentStyles(): void {
 
     #wupage-floating-hitbox:has(#wupage-floating-ball[data-edge="left"]):hover #wupage-floating-ball,
     #wupage-floating-ball[data-edge="left"].is-menu-open {
-      transform: translateX(20px);
+      transform: translateX(var(--wp-floating-reveal, 20px));
     }
 
     #wupage-floating-hitbox:has(#wupage-floating-ball[data-edge="right"]):hover #wupage-floating-ball,
     #wupage-floating-ball[data-edge="right"].is-menu-open {
-      transform: translateX(-20px);
+      transform: translateX(calc(-1 * var(--wp-floating-reveal, 20px)));
     }
 
     #wupage-floating-menu {
@@ -1090,5 +1116,6 @@ export function injectContentStyles(): void {
     }
 
   `;
+  style.textContent += floatingRefreshStyles;
   document.documentElement.append(style);
 }

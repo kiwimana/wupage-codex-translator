@@ -96,7 +96,7 @@ describe("floating language controls", () => {
     expect(getComputedStyle(hitbox).position).toBe("fixed");
     expect(hitbox.style.getPropertyPriority("left")).toBe("important");
     expect(hitbox.style.getPropertyPriority("top")).toBe("important");
-    expect(ball.textContent).toBe("译");
+    expect(ball.textContent).toBe("譯");
     expect(getComputedStyle(label).fontStyle).toBe("normal");
     expect(getComputedStyle(label).transform).toBe("none");
     expect(getComputedStyle(label).writingMode).toBe("horizontal-tb");
@@ -150,7 +150,7 @@ describe("floating language controls", () => {
     menu.hidden = false;
 
     expect(getComputedStyle(menu).boxSizing).toBe("border-box");
-    expect(getComputedStyle(menu).width).toBe("296px");
+    expect(getComputedStyle(menu).width).toBe("328px");
     expect(getComputedStyle(languageLabel).float).toBe("none");
     expect(getComputedStyle(languageLabel).width).toBe("auto");
     expect(getComputedStyle(languageLabel).paddingTop).toBe("0px");

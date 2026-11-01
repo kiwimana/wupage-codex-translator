@@ -34,7 +34,7 @@ export function initEmbeddedVideoSubtitles(): void {
       module.initVideoSubtitles();
       chrome.runtime.onMessage.addListener((request, _sender, respond) => {
         if (request.type !== "OPEN_VIDEO_SUBTITLES") return;
-        void module.openVideoSubtitles().then((data: { opened: boolean }) => respond({ ok: true, data }),
+        void module.openVideoSubtitles(request.action).then((data: { opened: boolean }) => respond({ ok: true, data }),
           (error: unknown) => respond({ ok: false, error: String(error) }));
         return true;
       });

@@ -4,6 +4,7 @@ import { TRANSLATION_DISPLAY_MODES } from "../shared/display-modes";
 import type { ExtensionSettings } from "../shared/types";
 import "./styles.css";
 import "../shared/appearance.css";
+import "./refresh.css";
 import { setupAppearance } from "../shared/appearance-runtime";
 import { setImageTranslationToggle, setupOcrControl } from "../shared/ocr-control";
 import { getExtensionDetailsUrl, isLikelyPdfUrl, openPdfWorkspaceInNewTab } from "../pdf/launch";
@@ -20,8 +21,10 @@ import { normalizeVideoTranslation } from "../shared/video";
 import { normalizeAppearance } from "../shared/appearance";
 import { applyPopupMenuLayout } from "../shared/popup-menu";
 import { paragraphClickHint } from "../shared/local-shortcuts";
+import { CHATGPT_BUILD } from "../shared/chatgpt-build";
 
 renderUiIcons();
+document.querySelector<HTMLElement>(".session-note")?.toggleAttribute("hidden", !CHATGPT_BUILD);
 
 const targetLang = query<HTMLSelectElement>("#targetLang");
 const sourceLang = query<HTMLSelectElement>("#sourceLang");
@@ -31,6 +34,7 @@ const status = query<HTMLParagraphElement>("#status");
 const pageToggleButton = query<HTMLButtonElement>("#pageToggle");
 const openPdfWorkspaceButton = query<HTMLButtonElement>("#openPdfWorkspace");
 const videoTranslationButton = query<HTMLButtonElement>("#videoTranslation");
+const translateCcButton = query<HTMLButtonElement>("#translateCc");
 const fileAccessHelp = query<HTMLDivElement>("#fileAccessHelp");
 const openFileAccessSettingsButton = query<HTMLButtonElement>("#openFileAccessSettings");
 const paragraphModeButton = query<HTMLButtonElement>("#paragraphMode");
@@ -46,8 +50,8 @@ const clearCacheButton = query<HTMLButtonElement>("#clearCache");
 const optionsButton = query<HTMLButtonElement>("#openOptions");
 const githubButton = query<HTMLButtonElement>("#openGithub");
 const websiteButton = query<HTMLButtonElement>("#openWebsite");
-const GITHUB_URL = "https://github.com/mr-wuliu/wupage";
-const WEBSITE_URL = "https://wupage.mrwuliu.top/";
+const GITHUB_URL = "https://github.com/kiwimana/wupage-codex-translator";
+const WEBSITE_URL = "https://github.com/kiwimana/wupage-codex-translator#readme";
 
 let settings: ExtensionSettings;
 let paragraphMode = false;
@@ -60,6 +64,9 @@ let pageActionVersion = 0;
 let floatingBallEnabled = true;
 let activeTabIsPdf = false;
 let activePageURL: string | undefined;
+let activeTabId: number | undefined;
+let ccEnabled = false;
+let ccActionVersion = 0;
 let pageTranslationAvailable = true;
 let settingsReady = false;
 let settingsSave: Promise<unknown> = Promise.resolve();
@@ -73,6 +80,12 @@ void init().catch((error: unknown) => {
 });
 
 async function init(): Promise<void> {
+  if (CHATGPT_BUILD) {
+    videoTranslationButton.hidden = true;
+    translateCcButton.hidden = false;
+    translateCcButton.title = "翻譯目前影片的 CC 字幕，原文在上、譯文在下；再次點擊可停止。";
+    translateCcButton.addEventListener("click", () => { void toggleCcTranslation(); });
+  }
   const stopParagraphMode = observeParagraphMode(enabled => {
     paragraphModeRevision++;
     paragraphMode = enabled;
@@ -81,6 +94,7 @@ async function init(): Promise<void> {
   window.addEventListener("pagehide", stopParagraphMode, { once: true });
   chrome.storage?.onChanged?.addListener(settingsChanged);
   window.addEventListener("pagehide", () => chrome.storage?.onChanged?.removeListener?.(settingsChanged), { once: true });
+  optionsButton.addEventListener("click", () => chrome.runtime.openOptionsPage());
   openFileAccessSettingsButton.addEventListener("click", () => {
     void chrome.tabs.create({ url: getExtensionDetailsUrl(chrome.runtime.id, navigator.userAgent) })
       .then(() => window.close()).catch((error: unknown) => {
@@ -133,31 +147,6 @@ async function init(): Promise<void> {
   setupOcrControl(imageTranslationButton, () => { settings.imageTranslationEnabled = false; setImageTranslationToggle(imageTranslationButton, false); });
   settingsReady = true;
   applyPopupSettings(settingsSnapshot.current() ?? settings);
-  const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  activePageURL = activeTab?.url;
-  updateAutoTranslationSiteButton();
-  fileAccessHelp.hidden = Boolean(activeTab?.url);
-  activeTabIsPdf = isLikelyPdfUrl(activeTab?.url);
-  pageTranslationAvailable = activeTabIsPdf || isSupportedPageUrl(activeTab?.url);
-  if (pageTranslationAvailable && !activeTabIsPdf) {
-    await loadParagraphMode();
-    await loadTranslationState();
-  } else if (!pageTranslationAvailable) {
-    paragraphModeAvailable = false;
-    paragraphModeButton.title = "浏览器设置页和扩展内部页面不支持段落模式。";
-    pageToggleButton.title = "请切换到普通网页后再翻译。";
-    debugButton.title = "请切换到普通网页后再打开 Debug。";
-    setStatus(activeTab?.url
-      ? "此页面不支持翻译，请切换到网页或 PDF。"
-      : "无法读取当前页面地址。若为本地 PDF，请开启扩展的文件访问权限，或点击“打开 PDF”选择文件。");
-  }
-  if (activeTabIsPdf) {
-    paragraphModeAvailable = false;
-    paragraphModeButton.title = "PDF 使用独立的双栏翻译页面。";
-    updatePageToggleButton();
-  }
-  updatePageActionAvailability();
-
   const saveSelection = () => { void savePopupSettings().catch((error: unknown) => setStatus(error instanceof Error ? error.message : String(error))); };
   targetLang.addEventListener("change", saveSelection);
   sourceLang.addEventListener("change", saveSelection);
@@ -187,13 +176,47 @@ async function init(): Promise<void> {
   });
   debugButton.addEventListener("click", openDebugPanel);
   clearCacheButton.addEventListener("click", clearCache);
-  optionsButton.addEventListener("click", () => chrome.runtime.openOptionsPage());
   githubButton.addEventListener("click", () => {
     void chrome.tabs.create({ url: GITHUB_URL });
   });
   websiteButton.addEventListener("click", () => {
     void chrome.tabs.create({ url: WEBSITE_URL });
   });
+  // Popup settings must be usable even if the active page is slow or never
+  // answers its content-script messages. Page probes update state separately.
+  const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  activePageURL = activeTab?.url;
+  activeTabId = activeTab?.id;
+  if (CHATGPT_BUILD) {
+    translateCcButton.disabled = !isSupportedPageUrl(activePageURL) || isLikelyPdfUrl(activePageURL);
+    if (!translateCcButton.disabled) {
+      void loadCcState();
+      const ccTimer = window.setInterval(() => { void loadCcState(); }, 1500);
+      window.addEventListener("pagehide", () => window.clearInterval(ccTimer), { once: true });
+    }
+  }
+  updateAutoTranslationSiteButton();
+  fileAccessHelp.hidden = Boolean(activeTab?.url);
+  activeTabIsPdf = isLikelyPdfUrl(activeTab?.url);
+  pageTranslationAvailable = activeTabIsPdf || isSupportedPageUrl(activeTab?.url);
+  if (pageTranslationAvailable && !activeTabIsPdf) {
+    void loadParagraphMode();
+    void loadTranslationState();
+  } else if (!pageTranslationAvailable) {
+    paragraphModeAvailable = false;
+    paragraphModeButton.title = "浏览器设置页和扩展内部页面不支持段落模式。";
+    pageToggleButton.title = "请切换到普通网页后再翻译。";
+    debugButton.title = "请切换到普通网页后再打开 Debug。";
+    setStatus(activeTab?.url
+      ? "此页面不支持翻译，请切换到网页或 PDF。"
+      : "无法读取当前页面地址。若为本地 PDF，请开启扩展的文件访问权限，或点击“打开 PDF”选择文件。");
+  }
+  if (activeTabIsPdf) {
+    paragraphModeAvailable = false;
+    paragraphModeButton.title = "PDF 使用独立的双栏翻译页面。";
+    updatePageToggleButton();
+  }
+  updatePageActionAvailability();
   let syncing = false;
   const timer = !activeTabIsPdf && pageTranslationAvailable && activeTab?.id
     ? window.setInterval(() => {
@@ -511,6 +534,16 @@ async function toggleAutoTranslation(): Promise<void> {
 }
 
 function updateAutoTranslationButton(): void {
+  if (CHATGPT_BUILD) {
+    autoTranslationButton.textContent = "手動";
+    autoTranslationButton.title = "此版本只在按下翻譯後開始，不會自動翻譯。";
+    autoTranslationButton.setAttribute("aria-label", "手動翻譯模式");
+    autoTranslationButton.setAttribute("aria-pressed", "false");
+    autoTranslationButton.removeAttribute("data-loading");
+    autoTranslationButton.disabled = true;
+    updateAutoTranslationSiteButton();
+    return;
+  }
   const rules = normalizeAutoTranslation(settings.autoTranslation);
   if (autoTranslationButton.getAttribute("aria-pressed") !== String(rules.enabled)) autoTranslationButton.setAttribute("aria-pressed", String(rules.enabled));
   const title = rules.nonTargetLanguage ? "自动翻译非目标语言页面；可在设置中限定站点" : "按已配置的站点规则自动翻译";
@@ -693,6 +726,44 @@ function updateVideoTranslationButton(): void {
   const value = String(normalizeVideoTranslation(settings.videoTranslation).enabled);
   if (videoTranslationButton.getAttribute("aria-pressed") !== value) videoTranslationButton.setAttribute("aria-pressed", value);
   videoTranslationButton.removeAttribute("data-loading");
+}
+
+async function loadCcState(): Promise<void> {
+  if (activeTabId === undefined || translateCcButton.getAttribute("aria-busy") === "true") return;
+  const version = ccActionVersion;
+  try {
+    const result = await sendRuntimeMessage<{ enabled: boolean }>({ type: "OPEN_VIDEO_SUBTITLES", tabId: activeTabId, action: "state" });
+    if (version !== ccActionVersion) return;
+    ccEnabled = result.enabled === true;
+    updateCcButton();
+  } catch { /* A page can still be loading its content script. The action reports failures. */ }
+}
+
+function updateCcButton(): void {
+  translateCcButton.setAttribute("aria-pressed", String(ccEnabled));
+  translateCcButton.textContent = ccEnabled ? "停止 AI CC 字幕翻譯" : "AI 翻譯 CC 字幕";
+}
+
+async function toggleCcTranslation(): Promise<void> {
+  if (activeTabId === undefined) return;
+  ++ccActionVersion;
+  setButtonBusy(translateCcButton, true);
+  try {
+    if (!ccEnabled) {
+      await savePopupSettings();
+      await updatePopupSettings(latest => ({ videoTranslation: {
+        ...normalizeVideoTranslation(latest.videoTranslation), enabled: true, showOriginal: true, enabledSites: []
+      } }));
+    }
+    const result = await sendRuntimeMessage<{ enabled: boolean }>({ type: "OPEN_VIDEO_SUBTITLES", tabId: activeTabId, action: ccEnabled ? "stop" : "start" });
+    ccEnabled = result.enabled === true;
+    setStatus(ccEnabled ? "AI 雙語字幕已啟動。字幕準備中可能暫停影片，完成後會繼續播放。" : "AI 字幕翻譯已停止，已恢復原字幕。");
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : String(error));
+  } finally {
+    updateCcButton();
+    setButtonBusy(translateCcButton, false);
+  }
 }
 
 async function toggleVideoTranslation(): Promise<void> {

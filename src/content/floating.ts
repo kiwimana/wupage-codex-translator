@@ -36,6 +36,7 @@ import { createSettingsSnapshot } from "../shared/settings-snapshot";
 import { isLikelyPdfUrl } from "../pdf/launch";
 import { observeParagraphMode } from "../shared/paragraph-mode";
 import { SOURCE_LANGUAGES, TARGET_LANGUAGES } from "../shared/languages";
+import { CHATGPT_BUILD } from "../shared/chatgpt-build";
 
 const FLOATING_ID = "wupage-floating-ball";
 const FLOATING_HITBOX_ID = "wupage-floating-hitbox";
@@ -46,13 +47,15 @@ const POSITION_KEY = "wupage.floating.position";
 const EDGE_MARGIN = 8;
 const EDGE_VISIBLE = 22;
 const SNAP_THRESHOLD = 56;
-const HITBOX_PADDING = 16;
-const FLOATING_SIZE = 42;
+const HITBOX_PADDING = CHATGPT_BUILD ? 10 : 16;
+const FLOATING_SIZE = CHATGPT_BUILD ? 52 : 42;
+const EDGE_REVEAL = CHATGPT_BUILD ? 0 : 20;
+const VISIBLE_EDGE_INSET = 12;
 const DEFAULT_BOTTOM = 146;
 const MENU_OPEN_DELAY = 500;
 const MENU_CLOSE_DELAY = 240;
-const DRAG_THRESHOLD = 4;
-const TOUCH_DRAG_THRESHOLD = 8;
+const DRAG_THRESHOLD = CHATGPT_BUILD ? 10 : 4;
+const TOUCH_DRAG_THRESHOLD = CHATGPT_BUILD ? 12 : 8;
 let activeParagraph: Element | null = null;
 let translating = false;
 let dragging = false;
@@ -112,6 +115,20 @@ export function initFloatingBall(): void {
 
   const hitbox = document.createElement("div");
   hitbox.id = FLOATING_HITBOX_ID;
+  if (CHATGPT_BUILD) {
+    hitbox.style.setProperty("--wp-floating-size", `${FLOATING_SIZE}px`);
+    hitbox.style.setProperty("--wp-floating-padding", `${HITBOX_PADDING}px`);
+    hitbox.style.setProperty("--wp-floating-reveal", "0px");
+    hitbox.style.setProperty("--wp-floating-menu-hitbox-events", "auto");
+    hitbox.addEventListener("click", event => {
+      if (event.target !== hitbox) return;
+      event.stopPropagation();
+      button.click();
+    });
+    hitbox.addEventListener("pointerdown", event => {
+      if (event.target === hitbox) startDrag(event);
+    });
+  }
   const button = document.createElement("button");
   button.id = FLOATING_ID;
   button.type = "button";
@@ -122,7 +139,7 @@ export function initFloatingBall(): void {
   button.setAttribute("aria-haspopup", "dialog");
   const label = document.createElement("span");
   label.className = "wupage-floating-label";
-  label.textContent = "译";
+  label.textContent = "譯";
   button.append(label);
   button.addEventListener("click", (event) => {
     cancelMenuOpen();
@@ -279,7 +296,7 @@ function handleDocumentClick(event: MouseEvent): void {
 function startDrag(event: PointerEvent): void {
   if ((event.button !== 0 && event.button !== undefined) || event.isPrimary === false
     || activePointerId !== undefined) return;
-  const button = event.currentTarget as HTMLElement;
+  const button = document.getElementById(FLOATING_ID)!;
   activePointerId = event.pointerId;
   touchInteraction = event.pointerType === "touch";
   longPressTriggered = false;
@@ -356,7 +373,7 @@ function createMenu(): void {
   menu.innerHTML = `
     <div class="wupage-menu-top">
     <div class="wupage-menu-header">
-      <strong>WuPage</strong>
+      <div class="wupage-brand"><span class="wupage-brand-mark" aria-hidden="true">${uiIconMarkup("font")}</span><div><strong>WuPage</strong><span class="wupage-brand-description">雙語閱讀助手</span></div></div>
       <button type="button" data-action="settings" aria-label="打开设置" title="打开设置">
         ${uiIconMarkup("settings")}
       </button>
@@ -435,6 +452,7 @@ function createMenu(): void {
       </button>
     </div>
     <p id="wupage-paragraph-mode-hint" class="wupage-menu-hint" hidden>所有网页生效；按住 Ctrl 点击段落翻译，再次点击恢复原文。</p>
+    ${CHATGPT_BUILD ? '<p class="wupage-session-note">點擊才翻譯 · 不保存本機譯文</p>' : ''}
     <div class="wupage-translation-feedback">
       <p data-role="translation-status" role="status" aria-live="polite" aria-atomic="true">点击悬浮球即可翻译全文</p>
       <button type="button" data-action="retranslate" hidden>重新翻译</button>
@@ -592,13 +610,13 @@ function positionMenu(menu: HTMLElement, button: HTMLElement, preserveTop = fals
   const rect = button.getBoundingClientRect();
   const ballLeft = hitbox ? Number.parseFloat(hitbox.style.left) + HITBOX_PADDING : rect.left;
   const ballTop = hitbox ? Number.parseFloat(hitbox.style.top) + HITBOX_PADDING : rect.top;
-  const leftAnchor = ballLeft + (button.dataset.edge === "left" ? 20 : button.dataset.edge === "right" ? -20 : 0);
+  const leftAnchor = ballLeft + (button.dataset.edge === "left" ? EDGE_REVEAL : button.dataset.edge === "right" ? -EDGE_REVEAL : 0);
   const availableLeft = leftAnchor - EDGE_MARGIN * 2;
   const availableRight = window.innerWidth - leftAnchor - size - EDGE_MARGIN * 2;
   const availableSide = Math.max(availableLeft, availableRight);
   const viewportWidth = Math.max(0, window.innerWidth - EDGE_MARGIN * 2);
   const beside = availableSide >= Math.min(240, viewportWidth);
-  const width = Math.min(296, beside ? availableSide : viewportWidth);
+  const width = Math.min(328, beside ? availableSide : viewportWidth);
   const availableAbove = Math.max(0, ballTop - EDGE_MARGIN * 2);
   const availableBelow = Math.max(0, window.innerHeight - ballTop - size - EDGE_MARGIN * 2);
   const maxHeight = beside ? window.innerHeight - EDGE_MARGIN * 2 : Math.max(availableAbove, availableBelow);
@@ -640,6 +658,14 @@ function applyMenuSettings(menu: HTMLElement, settings: ExtensionSettings): void
   if (automatic) automatic.setAttribute("aria-pressed", String(settings.autoTranslation?.enabled === true));
   menu.dataset.doubaoProvider = String(settings.providers.find((provider) => provider.id === settings.activeProviderId)?.type === "doubao-web");
   updateAutoTranslationSiteButton(menu, settings.autoTranslation);
+  if (CHATGPT_BUILD && automatic) {
+    automatic.textContent = "手動";
+    automatic.disabled = true;
+    automatic.title = "點擊翻譯後才開始，不會自動翻譯。";
+    automatic.setAttribute("aria-label", "手動翻譯");
+    automatic.setAttribute("aria-pressed", "false");
+    menu.querySelector<HTMLButtonElement>("[data-action='add-auto-site']")!.hidden = true;
+  }
   const contextMenu = menu.querySelector<HTMLButtonElement>("[data-action='context-menu-translation']");
   if (contextMenu) contextMenu.setAttribute("aria-pressed", String(settings.contextMenuTranslationEnabled === true));
   menu.querySelector("[data-action='selection-translation']")?.setAttribute("aria-pressed", String(normalizeSelectionTranslation(settings.selectionTranslation).enabled));
@@ -726,7 +752,7 @@ async function restorePosition(button: HTMLElement): Promise<void> {
 
   const size = getFloatingSize(button);
   const position: FloatingPosition = {
-    left: window.innerWidth - EDGE_VISIBLE,
+    left: edgePosition("right", size),
     top: clamp(window.innerHeight - DEFAULT_BOTTOM, EDGE_MARGIN, window.innerHeight - size - EDGE_MARGIN),
     edge: "right"
   };
@@ -739,9 +765,9 @@ function applyFloatingPosition(button: HTMLElement, position: FloatingPosition):
   const maxLeft = Math.max(EDGE_MARGIN, window.innerWidth - size - EDGE_MARGIN);
   const maxTop = Math.max(EDGE_MARGIN, window.innerHeight - size - EDGE_MARGIN);
   const left = position.edge === "left"
-    ? EDGE_VISIBLE - size
+    ? edgePosition("left", size)
     : position.edge === "right"
-      ? window.innerWidth - EDGE_VISIBLE
+      ? edgePosition("right", size)
       : clamp(position.left, EDGE_MARGIN, maxLeft);
   if (position.edge) button.dataset.edge = position.edge;
   else delete button.dataset.edge;
@@ -763,11 +789,16 @@ function getFloatingSize(button: HTMLElement): number {
   return button.offsetWidth || FLOATING_SIZE;
 }
 
+function edgePosition(edge: "left" | "right", size: number): number {
+  if (CHATGPT_BUILD) return edge === "left" ? VISIBLE_EDGE_INSET : Math.max(0, window.innerWidth - size - VISIBLE_EDGE_INSET);
+  return edge === "left" ? EDGE_VISIBLE - size : window.innerWidth - EDGE_VISIBLE;
+}
+
 function snapToEdge(button: HTMLElement): void {
   const rect = button.getBoundingClientRect();
   const size = getFloatingSize(button);
   const edge = rect.left + size / 2 < window.innerWidth / 2 ? "left" : "right";
-  const left = edge === "left" ? EDGE_VISIBLE - size : window.innerWidth - EDGE_VISIBLE;
+  const left = edgePosition(edge, size);
   const top = clamp(rect.top, EDGE_MARGIN, window.innerHeight - size - EDGE_MARGIN);
   setButtonPosition(button, left, top);
   button.dataset.edge = edge;
@@ -921,7 +952,7 @@ export function refreshTranslationState(): void {
   ball?.setAttribute("aria-label", actionLabel);
   if (ball) ball.title = floatingBallTitle(actionLabel);
   const label = ball?.querySelector(".wupage-floating-label");
-  const ballLabel = busy || translationEnabled ? "原" : "译";
+  const ballLabel = busy || translationEnabled ? "原" : "譯";
   if (label && label.textContent !== ballLabel) label.textContent = ballLabel;
 
   const menu = document.getElementById("wupage-floating-menu");

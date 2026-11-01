@@ -29,18 +29,25 @@ export function registerVideoFrame(request: Extract<RuntimeRequest, { type: "VID
   frames.set(key, { tab: sender.tab!.id!, frame: sender.frameId!, area: request.area, playing: request.playing === true, seen: Date.now() });
 }
 
-export async function openVideoInTab(tabId: number | undefined): Promise<unknown> {
+export async function openVideoInTab(tabId: number | undefined, action: "start" | "stop" | "state" = "start"): Promise<unknown> {
   if (!Number.isInteger(tabId)) throw new Error("没有活动视频页面。");
-  if (!normalizeVideoTranslation((await getSettings()).videoTranslation).enabled) throw new Error("视频字幕已关闭，请先在扩展弹窗中开启。");
+  if (action === "start" && !normalizeVideoTranslation((await getSettings()).videoTranslation).enabled) throw new Error("视频字幕已关闭，请先在扩展弹窗中开启。");
   const candidates = [...frames.values()].filter(frame => frame.tab === tabId && Date.now() - frame.seen < 15_000)
     .sort((a, b) => videoPriority(b.area, b.playing) - videoPriority(a.area, a.playing));
   const ids = [...new Set([...candidates.map(frame => frame.frame), 0])];
+  let enabled = false;
+  let opened = false;
   for (const frameId of ids) {
     try {
-      const response = await chrome.tabs.sendMessage(tabId!, { type: "OPEN_VIDEO_SUBTITLES" }, { frameId });
-      if (response?.ok && response.data?.opened) return response.data;
+      const response = await chrome.tabs.sendMessage(tabId!, { type: "OPEN_VIDEO_SUBTITLES", ...(action !== "start" ? { action } : {}) }, { frameId });
+      if (response?.ok) {
+        enabled ||= response.data?.enabled === true;
+        opened ||= response.data?.opened === true;
+        if (action === "start" && response.data?.opened) return response.data;
+      }
     } catch { /* An embedded frame may have navigated since discovery. */ }
   }
+  if (action !== "start") return { opened, enabled };
   throw new Error("当前页面没有找到可播放的视频，请先打开视频后重试。");
 }
 
@@ -57,7 +64,8 @@ export async function translateVideo(request: Extract<RuntimeRequest, { type: "T
   try {
     const settings = await getSettings();
     if (!normalizeVideoTranslation(settings.videoTranslation).enabled) throw new Error("视频字幕已关闭。");
-    const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(15_000)]);
+    const provider = settings.providers.find(entry => entry.id === (request.providerId ?? settings.activeProviderId));
+    const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(provider?.type === "chatgpt-desktop" ? 180_000 : 15_000)]);
     signal.throwIfAborted();
     return await translateWithSettings(settings, { texts: request.texts, sourceLang: request.sourceLang, targetLang: request.targetLang, providerId: request.providerId },
       { signal, priority: true, persistentCache: false });

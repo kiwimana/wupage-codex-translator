@@ -1,4 +1,5 @@
 import { uiIconUrl } from "./ui-icons";
+import { CHATGPT_BUILD } from "./chatgpt-build";
 import { DEFAULT_POPUP_MENU, normalizePopupMenu, type PopupMenuLayout } from "./popup-menu";
 
 export type AppearanceMode = "system" | "light" | "dark";
@@ -69,18 +70,24 @@ export const COLOR_FIELDS: ReadonlyArray<{ key: keyof AppearanceColors; label: s
 ];
 
 export const BUILT_IN_SCHEMES: readonly ColorScheme[] = [
-  { id: "wupage-light", name: "雾青", tone: "light", colors: createColors({
+  { id: "wupage-light", name: CHATGPT_BUILD ? "鳶尾紫" : "雾青", tone: "light", colors: createColors(CHATGPT_BUILD ? {
+    background: "#f6f5fa", surface: "#ffffff", foreground: "#252333", muted: "#787487",
+    accent: "#7354d5", border: "#e6e2ee", success: "#32785b", danger: "#bd4055"
+  } : {
     background: "#f7f8f5", surface: "#ffffff", foreground: "#172026", muted: "#647379",
     accent: "#116466", border: "#d7dedb", success: "#25734c", danger: "#b42318"
-  }, { "translation-light": "#0f766e", "translation-dark": "#5eead4", "floating-hover": "#0f5557" }) },
+  }, { "translation-light": "#0f766e", "translation-dark": "#5eead4", "floating-hover": CHATGPT_BUILD ? "#6445c2" : "#0f5557" }) },
   { id: "paper", name: "暖纸", tone: "light", colors: createColors({
     background: "#f5f1e8", surface: "#fffdf7", foreground: "#332d25", muted: "#786c5b",
     accent: "#936235", border: "#ddd3c2", success: "#50733d", danger: "#b13f35"
   }, { "translation-dark": "#edc69d", "floating-hover": "#79502a" }) },
-  { id: "wupage-dark", name: "夜青", tone: "dark", colors: createColors({
+  { id: "wupage-dark", name: CHATGPT_BUILD ? "暮夜紫" : "夜青", tone: "dark", colors: createColors(CHATGPT_BUILD ? {
+    background: "#13131b", surface: "#1d1c27", foreground: "#f1eef8", muted: "#a8a2b8",
+    accent: "#c4adff", border: "#373240", success: "#9cd6bb", danger: "#ffa5b5"
+  } : {
     background: "#151e20", surface: "#202c2e", foreground: "#e7efec", muted: "#a5b8b5",
     accent: "#83d2c5", border: "#3c5050", success: "#8ad4a4", danger: "#ffaaa2"
-  }, { "translation-light": "#0f766e", "translation-dark": "#5eead4", "floating-hover": "#a1e4d8" }) },
+  }, { "translation-light": "#0f766e", "translation-dark": "#5eead4", "floating-hover": CHATGPT_BUILD ? "#d3c1ff" : "#a1e4d8" }) },
   { id: "midnight", name: "午夜蓝", tone: "dark", colors: createColors({
     background: "#151b2b", surface: "#202a40", foreground: "#e6ecfa", muted: "#a4b2d0",
     accent: "#9cbcff", border: "#394866", success: "#8bd5b0", danger: "#ffaaa9"

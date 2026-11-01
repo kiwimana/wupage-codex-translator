@@ -24,6 +24,15 @@ describe("subtitle files", () => {
 });
 
 describe("subtitle translation scheduling", () => {
+  it("prefetches a longer bounded window for slower AI providers", async () => {
+    const translate = vi.fn(async (texts: string[]) => texts.map(text => `譯:${text}`));
+    const session = new SubtitleTranslator(() => [...cues, { start: 120, end: 125, text: "Far away" }], translate, vi.fn(), 90);
+    session.update(0); await flush();
+    expect(translate).toHaveBeenCalledWith(["Hello", "Later"], expect.any(AbortSignal));
+    session.update(20); await flush();
+    expect(session.current()).toEqual({ source: "Later", translation: "譯:Later" });
+    session.dispose();
+  });
   it("prefetches only the nearby window, uses end-exclusive cue times, and reuses translations", async () => {
     const translate = vi.fn(async (texts: string[]) => texts.map(text => `译:${text}`));
     const session = new SubtitleTranslator(() => cues, translate, vi.fn());

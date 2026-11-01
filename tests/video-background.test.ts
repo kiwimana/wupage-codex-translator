@@ -12,6 +12,15 @@ const request = { type: "TRANSLATE_VIDEO_SUBTITLES", sessionId: "session", reque
 beforeEach(() => { vi.mocked(getSettings).mockResolvedValue(DEFAULT_SETTINGS); vi.stubGlobal("chrome", { tabs: { sendMessage: vi.fn(async () => ({ ok: true, data: { opened: true } })) } }); });
 afterEach(() => { clearVideoTab(4); vi.clearAllMocks(); vi.unstubAllGlobals(); });
 describe("video frame routing and cancellation", () => {
+  it("reads state and stops every candidate frame without requiring the global feature to be on", async () => {
+    vi.mocked(getSettings).mockResolvedValue({ ...DEFAULT_SETTINGS, videoTranslation: normalizeVideoTranslation({ enabled: false }) });
+    registerVideoFrame({ type: "VIDEO_FRAME_STATUS", videos: 1, area: 1000, playing: false }, { ...sender, frameId: 3 });
+    vi.mocked(chrome.tabs.sendMessage).mockImplementation(async (_tab, message) => ({ ok: true, data: { opened: true, enabled: (message as { action: string }).action === "state" } }));
+    await expect(openVideoInTab(4, "state")).resolves.toEqual({ opened: true, enabled: true });
+    await expect(openVideoInTab(4, "stop")).resolves.toEqual({ opened: true, enabled: false });
+    expect(chrome.tabs.sendMessage).toHaveBeenCalledWith(4, { type: "OPEN_VIDEO_SUBTITLES", action: "stop" }, { frameId: 3 });
+    expect(chrome.tabs.sendMessage).toHaveBeenCalledWith(4, { type: "OPEN_VIDEO_SUBTITLES", action: "stop" }, { frameId: 0 });
+  });
   it("rejects opening and translation while the video feature is disabled", async () => {
     vi.mocked(getSettings).mockResolvedValue({ ...DEFAULT_SETTINGS, videoTranslation: normalizeVideoTranslation({ enabled: false }) });
     await expect(openVideoInTab(4)).rejects.toThrow("已关闭");

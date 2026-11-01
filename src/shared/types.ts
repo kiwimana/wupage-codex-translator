@@ -4,6 +4,7 @@ import type { VideoTranslationSettings } from "./video";
 import type { ShortcutEnabledSettings, ShortcutSettings, TranslationShortcut } from "./shortcuts";
 
 export type ProviderType =
+  | "chatgpt-desktop"
   | "doubao-web"
   | "firefox-local"
   | "microsoft-web-translate"
@@ -91,6 +92,10 @@ export interface FirefoxLocalConfig extends ProviderBaseConfig {
   type: "firefox-local";
 }
 
+export interface ChatGPTDesktopConfig extends ProviderBaseConfig {
+  type: "chatgpt-desktop";
+}
+
 export interface MicrosoftTranslatorConfig extends ProviderBaseConfig {
   type: "microsoft-translator";
   endpoint: string;
@@ -159,6 +164,7 @@ export interface HttpTemplateConfig extends ProviderBaseConfig {
 }
 
 export type ProviderConfig =
+  | ChatGPTDesktopConfig
   | DoubaoWebConfig
   | FirefoxLocalConfig
   | MicrosoftWebTranslateConfig
@@ -320,7 +326,7 @@ export type RuntimeRequest =
   | { type: "INSTALL_OCR" }
   | { type: "REMOVE_OCR" }
   | { type: "TRANSLATE_PAGE" }
-  | { type: "OPEN_VIDEO_SUBTITLES"; tabId?: number }
+  | { type: "OPEN_VIDEO_SUBTITLES"; tabId?: number; action?: "start" | "stop" | "state" }
   | { type: "VIDEO_FRAME_STATUS"; videos: number; area: number; playing: boolean }
   | ({ type: "TRANSLATE_VIDEO_SUBTITLES"; sessionId: string; requestId: string } & TranslateBatchRequest)
   | { type: "CANCEL_VIDEO_SUBTITLES"; sessionId: string; requestId?: string }

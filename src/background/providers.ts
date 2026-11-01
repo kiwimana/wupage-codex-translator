@@ -26,6 +26,7 @@ import { supportsServiceMode, translationApiOptions } from "../shared/translatio
 import { signVolcengineTranslation } from "./volcengine-signing";
 import { applyRequestTemplate, defaultLlmRequest, requestTemplateContext, validateRequestTemplate } from "../shared/request-template";
 import { DoubaoProvider } from "./doubao";
+import { ChatGPTDesktopProvider } from "./chatgpt-desktop";
 
 const GOOGLE_WEB_REQUEST_CONCURRENCY = 4;
 const WEB_TRANSLATION_TIMEOUT_MS = 20_000;
@@ -102,6 +103,7 @@ Estimate the original text color and the local background color behind the text.
 }
 
 export function createProvider(config: ProviderConfig): TranslatorProvider {
+  if (config.type === "chatgpt-desktop") return new ChatGPTDesktopProvider(config);
   if (supportsServiceMode(config) && config.serviceMode === "api") {
     const api = translationApiOptions(config);
     if (config.type === "microsoft-web-translate") return new MicrosoftTranslatorProvider({

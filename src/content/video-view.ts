@@ -1,4 +1,5 @@
 import { TARGET_LANGUAGES } from "../shared/languages";
+import { CHATGPT_BUILD } from "../shared/chatgpt-build";
 import type { ExtensionSettings } from "../shared/types";
 import { normalizeVideoTranslation, type VideoTranslationSettings } from "../shared/video";
 import { uiIconMarkup } from "../shared/ui-icons";
@@ -17,33 +18,38 @@ export interface VideoViewActions {
 const styles = `
   :host { all: initial !important; position: absolute !important; top: var(--wp-layer-top,0px) !important; left: var(--wp-layer-left,0px) !important; width: var(--wp-layer-width,100%) !important; height: var(--wp-layer-height,100%) !important; z-index: 2147483600 !important; pointer-events: none !important; container-type: inline-size !important; color-scheme: dark !important; direction: ltr; } :host([hidden]) { display: none !important; }
   * { box-sizing: border-box; } [hidden] { display: none !important; }
-  .toolbar { position: absolute; right: 14px; top: 14px; display: flex; gap: 1px; align-items: center; color: #fff; background: #172024eb; border: 1px solid #ffffff29; border-radius: 9px; box-shadow: 0 3px 12px #0003; opacity: 0; transform: translateY(-3px); transition: opacity .16s,transform .16s; pointer-events: none; }
+  .toolbar { position: absolute; right: 14px; top: 14px; display: flex; gap: 1px; align-items: center; color: #fff; background: #1c1928eb; border: 1px solid #ffffff29; border-radius: 9px; box-shadow: 0 3px 12px #0003; opacity: 0; transform: translateY(-3px); transition: opacity .16s,transform .16s; pointer-events: none; }
   :host([data-controls]) .toolbar, .toolbar:hover, .toolbar:focus-within, :host([data-panel]) .toolbar, :host([data-error]) .toolbar, :host([data-waiting]) .toolbar { opacity: 1; transform: none; pointer-events: auto; }
+  :host([data-native-controls]:not([data-panel]):not([data-error]):not([data-waiting])) .toolbar { display: none; }
+  /* Shorts reserves its top row for CC, menu and fullscreen controls. */
+  :host([data-shorts]) .toolbar { top: 64px; right: 12px; }
+  :host([data-shorts]) .notice { top: 108px; right: 12px; }
+  @container (max-width: 260px) { .toolbar .label { display: none; } }
   button, select, input { font: inherit; } button { cursor: pointer; } button:disabled { opacity: .5; cursor: default; }
   .toolbar button { border: 0; color: inherit; background: transparent; min-height: 34px; padding: 7px 10px; font: 500 12px/20px system-ui,sans-serif; }
   .toolbar button:hover { background: #ffffff18; } .toggle { display: flex; gap: 7px; align-items: center; border-radius: 8px 0 0 8px; }
   .mark { display: grid; place-items: center; width: 20px; height: 18px; border: 1px solid #ffffffa8; border-radius: 4px; font-size: 12px; }
-  :host([data-enabled]) .mark { color: #172024; background: #a9ead3; border-color: #a9ead3; }
+  :host([data-enabled]) .mark { color: #1c1928; background: #c4adff; border-color: #c4adff; }
   .settings { display: grid; place-items: center; border-left: 1px solid #ffffff1c !important; border-radius: 0 8px 8px 0; } .settings svg { width: 15px; height: 15px; }
-  button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid #a9ead3; outline-offset: 2px; }
+  button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid #c4adff; outline-offset: 2px; }
   .captions { position: absolute; left: 50%; bottom: max(10%, 46px); transform: translateX(-50%); width: 90%; text-align: center; color: #fff; font: 600 clamp(14px,3cqw,var(--wp-video-font,22px))/1.4 system-ui,sans-serif; text-shadow: 0 1px 3px #000,0 0 2px #000; }
   .source,.translation { white-space: pre-line; overflow-wrap: anywhere; } .source { font-size: .78em; font-weight: 500; margin-bottom: 5px; color: #f1f4f3; }
   .source span,.translation span { background: var(--wp-video-bg,#101718bf); box-decoration-break: clone; -webkit-box-decoration-break: clone; padding: 3px 8px; border-radius: 4px; }
   .source:has(span:empty),.translation:has(span:empty) { display: none; }
-  .panel { position: fixed; inset: auto; left: var(--wp-panel-left,12px); top: var(--wp-panel-top,60px); margin: 0; width: min(304px,calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow: auto; padding: 16px; border: 1px solid #ffffff26; border-radius: 12px; color: #f3f6f5; background: #172024f7; box-shadow: 0 12px 40px #0006; font: 13px/1.5 system-ui,sans-serif; pointer-events: auto; }
+  .panel { position: fixed; inset: auto; left: var(--wp-panel-left,12px); top: var(--wp-panel-top,60px); margin: 0; width: min(304px,calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow: auto; padding: 16px; border: 1px solid #ffffff26; border-radius: 18px; color: #f3f6f5; background: #1c1928f7; box-shadow: 0 12px 40px #0006; font: 13px/1.5 system-ui,sans-serif; pointer-events: auto; }
   .panel::backdrop { background: transparent; } .panel header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; } h2 { margin: 0; font-size: 14px; font-weight: 600; }
   .close { color: #c7d2cf; background: none; border: 0; border-radius: 4px; padding: 0 5px; font-size: 21px; line-height: 24px; }
-  .field { display: grid; gap: 5px; margin: 12px 0; color: #bacac5; font-size: 12px; }
-  select { width: 100%; min-width: 0; height: 33px; color: #f3f6f5; background: #233135; border: 1px solid #50615e; border-radius: 6px; padding: 5px 8px; font-size: 13px; }
+  .field { display: grid; gap: 5px; margin: 12px 0; color: #b4a9c6; font-size: 12px; }
+  select { width: 100%; min-width: 0; height: 33px; color: #f3f6f5; background: #272235; border: 1px solid #4b425e; border-radius: 6px; padding: 5px 8px; font-size: 13px; }
   .row { display: flex; gap: 12px; } .row > .field { flex: 1; min-width: 0; margin: 0; }
-  .check { display: flex; align-items: center; gap: 8px; margin: 12px 0; font-size: 12px; } input[type=checkbox] { accent-color: #a9ead3; margin: 0; width: 14px; height: 14px; }
-  .status { color: #bcd0c8; font-size: 12px; margin: 12px 0 0; overflow-wrap: anywhere; } :host([data-error]) .status { color: #ffcfaa; }
-  .help { margin: 5px 0 0; color: #93a6a0; font-size: 11px; }
-  .retry { margin-top: 10px; padding: 6px 12px; color: #15342b; border: 0; border-radius: 6px; background: #a9ead3; }
+  .check { display: flex; align-items: center; gap: 8px; margin: 12px 0; font-size: 12px; } input[type=checkbox] { accent-color: #c4adff; margin: 0; width: 14px; height: 14px; }
+  .status { color: #b9b0cc; font-size: 12px; margin: 12px 0 0; overflow-wrap: anywhere; } :host([data-error]) .status { color: #ffcfaa; }
+  .help { margin: 5px 0 0; color: #aaa0bc; font-size: 11px; }
+  .retry { margin-top: 10px; padding: 6px 12px; color: #2b1847; border: 0; border-radius: 6px; background: #c4adff; }
   details { margin-top: 12px; border-top: 1px solid #ffffff1f; padding-top: 10px; } summary { color: #c4d2cd; cursor: pointer; font-size: 12px; }
-  .import { margin-top: 10px; color: #e8f1ee; background: #233135; border: 1px solid #50615e; border-radius: 6px; padding: 6px 10px; }
-  .offset { width: 100%; height: 32px; border: 1px solid #50615e; border-radius: 6px; background: #233135; color: #fff; padding: 5px 8px; }
-  .notice { position: absolute; top: 58px; right: 14px; max-width: min(300px,calc(100% - 28px)); padding: 9px 12px; background: #172024ed; border: 1px solid #ffffff29; border-radius: 8px; color: #e4eeea; font: 12px/1.5 system-ui,sans-serif; pointer-events: auto; }
+  .import { margin-top: 10px; color: #e8f1ee; background: #272235; border: 1px solid #4b425e; border-radius: 6px; padding: 6px 10px; }
+  .offset { width: 100%; height: 32px; border: 1px solid #4b425e; border-radius: 6px; background: #272235; color: #fff; padding: 5px 8px; }
+  .notice { position: absolute; top: 58px; right: 14px; max-width: min(300px,calc(100% - 28px)); padding: 9px 12px; background: #1c1928ed; border: 1px solid #ffffff29; border-radius: 8px; color: #e4eeea; font: 12px/1.5 system-ui,sans-serif; pointer-events: auto; }
   @media (prefers-reduced-motion: reduce) { .toolbar { transition: none; } }
 `;
 
@@ -165,10 +171,20 @@ export class VideoView {
       provider.dataset.options = signature;
     }
     provider.value = settings.activeProviderId;
+    if (CHATGPT_BUILD) {
+      provider.disabled = true;
+      provider.title = "AI CC 字幕使用已登入的 ChatGPT 帳號。";
+    }
     this.root.querySelector<HTMLSelectElement>(".font")!.value = String(preferences.fontSize);
     this.root.querySelector<HTMLSelectElement>(".background")!.value = preferences.background;
     this.root.querySelector<HTMLInputElement>(".original")!.checked = preferences.showOriginal;
     this.root.querySelector<HTMLInputElement>(".automatic")!.checked = preferences.enabledSites.includes(site);
+    if (CHATGPT_BUILD) {
+      const automatic = this.root.querySelector<HTMLInputElement>(".automatic")!;
+      automatic.checked = false;
+      automatic.disabled = true;
+      automatic.title = "此版本由你點擊後才開始翻譯。";
+    }
     this.host.style.setProperty("--wp-video-font", `${preferences.fontSize}px`);
     this.host.style.setProperty("--wp-video-bg", preferences.background === "soft" ? "#101718bf" : "transparent");
   }

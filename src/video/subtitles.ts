@@ -56,7 +56,8 @@ export class SubtitleTranslator {
   constructor(
     private readonly readCues: () => SubtitleCue[],
     private readonly translate: (texts: string[], signal?: AbortSignal) => Promise<string[]>,
-    private readonly changed: () => void
+    private readonly changed: () => void,
+    private readonly lookaheadSeconds = 15
   ) {}
 
   update(time: number): void {
@@ -80,7 +81,7 @@ export class SubtitleTranslator {
     if (this.disposed || this.busy || this.error) return;
     const cues = this.readCues();
     const active = cues.filter(cue => cue.start <= this.time && cue.end > this.time);
-    const future = cues.filter(cue => cue.start > this.time && cue.start <= this.time + 15);
+    const future = cues.filter(cue => cue.start > this.time && cue.start <= this.time + this.lookaheadSeconds);
     const texts: string[] = [];
     let size = 0;
     for (const cue of [...active, ...future].slice(0, 128)) {

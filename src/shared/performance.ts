@@ -11,6 +11,9 @@ export function getEffectiveProviderPerformance(
   providerId = settings.activeProviderId
 ): EffectiveProviderPerformance {
   const provider = settings.providers.find((entry) => entry.id === providerId);
+  if (provider?.type === "chatgpt-desktop") {
+    return { chunkSize: 4000, concurrency: 1, performanceMode: "custom" };
+  }
   if (provider?.type === "doubao-web") {
     return { chunkSize: 1200, concurrency: 1, performanceMode: "custom" };
   }
@@ -33,7 +36,7 @@ export function getEffectiveProviderPerformance(
 }
 
 export function isLlmProvider(provider: ProviderConfig): boolean {
-  return provider.type === "openai-compatible"
+  return provider.type === "chatgpt-desktop" || provider.type === "openai-compatible"
     || provider.type === "anthropic-compatible"
     || provider.type === "deepseek"
     || provider.type === "zhipu-glm";

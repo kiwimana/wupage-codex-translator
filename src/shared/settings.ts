@@ -10,6 +10,8 @@ import { normalizeVideoTranslation } from "./video";
 import { normalizeRequestTemplate, supportsRequestTemplate } from "./request-template";
 import type { ExtensionSettings, ProviderConfig } from "./types";
 import { normalizeFrameTranslation } from "./frame-session";
+import { CHATGPT_BUILD } from "./chatgpt-build";
+import traditionalPresetLabels from "./traditional-preset-labels.json";
 
 export async function getSettings(): Promise<ExtensionSettings> {
   const result = await chrome.storage.local.get(SETTINGS_KEY);
@@ -41,15 +43,17 @@ export function normalizeSettings(value: unknown): ExtensionSettings {
   return {
     ...DEFAULT_SETTINGS,
     ...input,
-    ...(input.videoTranslation !== undefined ? { videoTranslation: normalizeVideoTranslation(input.videoTranslation) } : {}),
+    ...(input.videoTranslation !== undefined ? { videoTranslation: {
+      ...normalizeVideoTranslation(input.videoTranslation), ...(CHATGPT_BUILD ? { enabledSites: [] } : {})
+    } } : {}),
     providers,
     shortcuts: normalizeShortcuts(input.shortcuts),
     localShortcuts: normalizeLocalShortcuts(input.localShortcuts),
     shortcutEnabled: normalizeShortcutEnabled(input.shortcutEnabled, input.shortcuts, input.localShortcuts),
     appearance: normalizeAppearance(input.appearance),
-    autoTranslation: normalizeAutoTranslation(input.autoTranslation),
+    autoTranslation: normalizeAutoTranslation(CHATGPT_BUILD ? { enabled: false } : input.autoTranslation),
     frameTranslation: normalizeFrameTranslation(input.frameTranslation),
-    selectionTranslation: normalizeSelectionTranslation(input.selectionTranslation),
+    selectionTranslation: normalizeSelectionTranslation(input.selectionTranslation ?? DEFAULT_SETTINGS.selectionTranslation),
     targetLang: readString(input.targetLang, DEFAULT_SETTINGS.targetLang),
     sourceLang: readString(input.sourceLang, DEFAULT_SETTINGS.sourceLang),
     activeProviderId,
@@ -58,7 +62,7 @@ export function normalizeSettings(value: unknown): ExtensionSettings {
     pdfTranslationPageRadius: input.pdfTranslationPageRadius === null
       ? null
       : clampNumber(input.pdfTranslationPageRadius, 0, 1000, DEFAULT_SETTINGS.pdfTranslationPageRadius!),
-    cacheEnabled:
+    cacheEnabled: CHATGPT_BUILD ? false :
       typeof input.cacheEnabled === "boolean"
         ? input.cacheEnabled
         : DEFAULT_SETTINGS.cacheEnabled,
@@ -138,6 +142,10 @@ function normalizeProvider(
   globalChunkSize: number,
   globalConcurrency: number
 ): ProviderConfig {
+  if (CHATGPT_BUILD) {
+    const label = (traditionalPresetLabels as Record<string, string>)[provider.label];
+    if (label) provider = { ...provider, label };
+  }
   if (provider.type === "doubao-web") {
     return {
       type: "doubao-web",
@@ -227,7 +235,7 @@ function isProviderConfig(value: unknown): value is ProviderConfig {
   ) return false;
   if (value.chunkSize !== undefined && typeof value.chunkSize !== "number") return false;
   if (value.concurrency !== undefined && typeof value.concurrency !== "number") return false;
-  if (value.type === "google-web-translate" || value.type === "microsoft-web-translate"
+  if (value.type === "chatgpt-desktop" || value.type === "google-web-translate" || value.type === "microsoft-web-translate"
     || value.type === "tencent-transmart" || value.type === "yandex-web-translate"
     || value.type === "volcengine-web-translate" || value.type === "mymemory"
     || value.type === "firefox-local" || value.type === "doubao-web") {

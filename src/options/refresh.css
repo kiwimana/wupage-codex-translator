@@ -1,0 +1,32 @@
+/* Use the same surfaces and accent as the compact translation panel. */
+body { color-scheme: var(--wp-color-scheme, light); font-size: 14px; line-height: 1.55; }
+.settings { grid-template-columns: 218px minmax(0, 880px); gap: 36px; width: min(1150px, calc(100% - 64px)); padding: 40px 0; }
+.settings-sidebar { gap: 30px; top: 32px; }
+.settings-brand { display: flex; align-items: center; gap: 10px; }
+.settings-brand > span { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 12px; color: var(--wp-on-accent); background: var(--wp-accent); }
+.settings-brand svg { width: 22px; height: 22px; }
+.settings-header h1 { font-size: 21px; letter-spacing: -.6px; }
+.settings-header p { margin: 10px 0 0; color: var(--wp-muted); font-size: 12px; }
+.settings-nav { gap: 5px; }
+.settings-nav a { border-radius: 12px; min-height: 46px; padding: 0 14px; font-size: 13px; }
+.settings-nav a[aria-current="page"] { border-color: transparent; background: var(--wp-selected); }
+.settings-nav a[aria-current="page"] svg { color: var(--wp-accent); }
+section { border-color: var(--wp-border); border-radius: 20px; padding: 28px; box-shadow: 0 3px 16px #00000003; gap: 20px; }
+.settings-panel-heading { border-bottom: 1px solid var(--wp-border); padding-bottom: 20px; margin-bottom: 0; gap: 8px; }
+.settings-panel-heading h2 { font-size: 21px; letter-spacing: -.5px; }
+.settings-panel-heading p { font-size: 12px; line-height: 1.75; }
+input:not([type="checkbox"]):not([type="radio"]):not([type="color"]), select, textarea { border-radius: 10px; border-color: var(--wp-border); }
+input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible { outline: 2px solid var(--wp-accent); outline-offset: 2px; }
+button { border-radius: 10px; font-size: 13px; }
+input[type="checkbox"], input[type="radio"] { accent-color: var(--wp-accent); }
+.settings-actions { border-radius: 16px; padding: 16px 20px; box-shadow: none; }
+.settings-actions button { min-height: 38px; }
+.general-toggles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.general-toggles .setting-toggle, .general-toggles .image-feature-row { border-radius: 12px; min-height: 48px; padding: 10px 12px; }
+.setting-toggle-control { width: 34px; height: 20px; border-radius: 99px; flex: 0 0 34px; }
+.setting-toggle-control::after { width: 14px; height: 14px; border-radius: 99px; }
+.setting-toggle input:checked + .setting-toggle-control::after { transform: translateX(14px); background: var(--wp-on-accent); }
+.provider-card, .appearance-preview, .color-scheme-card { border-radius: 14px; }
+@media (max-width: 960px) { .settings { grid-template-columns: 180px minmax(0, 1fr); gap: 20px; width: calc(100% - 40px); } section { padding: 22px; } }
+@media (max-width: 720px) { .settings { grid-template-columns: minmax(0, 1fr); width: calc(100% - 28px); padding: 22px 0; gap: 22px; } .settings-sidebar { gap: 20px; } .settings-nav a { min-height: 40px; padding: 0 12px; } section { padding: 20px; border-radius: 16px; } }
+@media (max-width: 440px) { .general-toggles { grid-template-columns: minmax(0, 1fr); } }

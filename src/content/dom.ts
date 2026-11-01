@@ -216,6 +216,17 @@ const YOUTUBE_DESCRIPTION_SELECTOR = [
 // Comment bodies use inline attributed strings in both YouTube renderers.
 // Their height/display describes the source text, not a compact UI label.
 const YOUTUBE_COMMENT_SELECTOR = "ytd-comment-view-model #content-text, ytd-comment-renderer #content-text";
+// Watch titles and recommendation links are prose even though YouTube renders
+// them as inline/line-clamped UI fields. Keep each title and its translation
+// together inside the original heading or link.
+const YOUTUBE_TITLE_SELECTOR = [
+  "ytd-watch-metadata h1",
+  "ytd-video-primary-info-renderer h1",
+  "ytd-compact-video-renderer #video-title",
+  "ytd-video-renderer #video-title",
+  ".ytLockupMetadataViewModelTitle",
+  ".yt-lockup-metadata-view-model__title"
+].join(",");
 // Reddit distributes comment metadata through named shadow-DOM slots. A
 // translation added to that wrapper can become an unslotted avatar-column item.
 const REDDIT_METADATA_SELECTOR = [
@@ -1627,7 +1638,7 @@ function groupTextSegments(
       singleNodeBlock &&
       readable!.text === nodeText &&
       !isLegacyScientificProseBlock(block) &&
-      !block.matches(`summary, label, li, ${X_POST_TEXT_SELECTOR}, ${YOUTUBE_COMMENT_SELECTOR}`)
+      !block.matches(`summary, label, li, ${X_POST_TEXT_SELECTOR}, ${YOUTUBE_COMMENT_SELECTOR}, ${YOUTUBE_TITLE_SELECTOR}`)
     ) continue;
     if (singleNodeBlock && !readable!.text) continue;
     const authoredLines = isAuthoredLineTextBlock(block);
@@ -1846,6 +1857,8 @@ function findGroupingBlock(element: Element | null): Element | null {
 }
 
 function computeGroupingBlock(element: Element): Element | null {
+  const youtubeTitle = element.closest(YOUTUBE_TITLE_SELECTOR);
+  if (youtubeTitle) return youtubeTitle;
   const description = element.closest(YOUTUBE_DESCRIPTION_SELECTOR);
   if (description) return element.closest("a") ? null : description;
   const comment = element.closest(YOUTUBE_COMMENT_SELECTOR);
@@ -2258,6 +2271,11 @@ function escapeRegExp(value: string): string {
 }
 
 function insertBlockTranslation(block: Element, translation: Element): void {
+  if (block.matches(YOUTUBE_TITLE_SELECTOR)) {
+    translation.setAttribute("data-wupage-container", "youtube-title");
+    block.append(translation);
+    return;
+  }
   // Keep translated text in the same named slot as its source. A sibling
   // without a slot is rendered in the custom element's default slot instead.
   if (block.hasAttribute("slot")) {
@@ -2322,6 +2340,7 @@ function insertGroupedTranslation(
 
 function getRenderMode(element: Element | null): RenderMode {
   if (!element) return "inline";
+  if (element.matches(YOUTUBE_TITLE_SELECTOR)) return "block";
   if (isLegacyScientificProseBlock(element)) return "block";
   if (element.matches(X_POST_TEXT_SELECTOR)) return "block";
   if (element.matches(YOUTUBE_COMMENT_SELECTOR)) return "block";
@@ -2363,6 +2382,7 @@ function isCompactUiElement(element: Element): boolean {
 
 function isLikelyUiToken(text: string, element: Element | null): boolean {
   if (!element) return false;
+  if (element.closest(YOUTUBE_TITLE_SELECTOR)) return false;
   if (legacyScientificProseBlock(element)) return false;
   if (element.closest(YOUTUBE_DESCRIPTION_SELECTOR)) return false;
   if (element.closest(YOUTUBE_COMMENT_SELECTOR)) return false;

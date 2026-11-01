@@ -1,6 +1,8 @@
+import { CHATGPT_BUILD } from "../shared/chatgpt-build";
+
 let opening: Promise<void> | undefined;
 
-if (import.meta.env.MODE === "firefox") {
+if (import.meta.env.MODE === "firefox" || CHATGPT_BUILD) {
   chrome.runtime.onMessage.addListener((request, sender) => {
     if (request?.target !== "inference-lifetime" || sender.id !== chrome.runtime.id
       || sender.tab) return;
@@ -11,7 +13,7 @@ if (import.meta.env.MODE === "firefox") {
 export async function ensureOffscreenDocument(): Promise<void> {
   if (opening) return opening;
   opening = (async () => {
-    if (import.meta.env.MODE === "firefox") {
+    if (import.meta.env.MODE === "firefox" || CHATGPT_BUILD) {
       // Firefox's event background page can host the same runtime document.
       // Keep it out of user tabs and wait for its module listeners to register.
       if (document.getElementById("wupage-local-runtime")) return;

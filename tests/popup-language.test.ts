@@ -191,8 +191,8 @@ describe("popup language controls", () => {
 
     query<HTMLButtonElement>("#openGithub").click();
     query<HTMLButtonElement>("#openWebsite").click();
-    expect(createTab).toHaveBeenCalledWith({ url: "https://github.com/mr-wuliu/wupage" });
-    expect(createTab).toHaveBeenCalledWith({ url: "https://wupage.mrwuliu.top/" });
+    expect(createTab).toHaveBeenCalledWith({ url: "https://github.com/kiwimana/wupage-codex-translator" });
+    expect(createTab).toHaveBeenCalledWith({ url: "https://github.com/kiwimana/wupage-codex-translator#readme" });
     createTab.mockClear();
 
     vi.spyOn(window, "close").mockImplementation(() => undefined);

@@ -1,3 +1,5 @@
+import { CHATGPT_BUILD } from "../shared/chatgpt-build";
+
 export interface PdfLaunchOptions {
   url: string | null;
   autoTranslate: boolean;
@@ -26,7 +28,7 @@ export function getPdfLaunchOptions(href: string): PdfLaunchOptions {
   const parameters = new URL(href).searchParams;
   return {
     url: parameters.get("url"),
-    autoTranslate: parameters.get("translate") !== "0"
+    autoTranslate: CHATGPT_BUILD ? parameters.get("translate") === "1" : parameters.get("translate") !== "0"
   };
 }
 

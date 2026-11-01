@@ -1,0 +1,10 @@
+繁體中文 Firefox 雙語翻譯擴充，使用下載者自己電腦上的 Codex 與自己的 ChatGPT 登入。
+
+- 新版紫色明暗介面、可拖曳「譯」懸浮球與設定頁。
+- 網頁上下雙語，以及 YouTube／Shorts AI CC 字幕操作。
+- 手動啟動、停用永久本機譯文快取。
+- 公開包不包含登入資料、金鑰或安裝後的機器設定；每位使用者需自行安裝橋接。
+
+下載 **firefox.zip** 與 **windows-bridge.zip**，依 README 安裝。來源 ZIP 可供自行建置。橋接安裝程式目前支援 Windows；Firefox 包尚未經 Mozilla 簽章，暫用擴充在瀏覽器重開後須重新載入。
+
+**雲端翻譯使用安裝者自身 ChatGPT／Codex 額度。** 不保存本機對話不等於服務端零留存。來源與第三方資源歸屬見 UPSTREAM.md。

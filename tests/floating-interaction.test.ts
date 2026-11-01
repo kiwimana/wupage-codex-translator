@@ -235,7 +235,7 @@ describe("floating translation interactions", () => {
     expect(translationRequests()).toHaveLength(1);
     expect(ball.textContent).toBe("原");
     ball.click();
-    expect(ball.textContent).toBe("译");
+    expect(ball.textContent).toBe("譯");
     expect(document.querySelector(".wupage-translation")).toBeNull();
     ball.click();
     expect(ball.textContent).toBe("原");
@@ -258,7 +258,7 @@ describe("floating translation interactions", () => {
     expect(ball.getAttribute("aria-label")).toBe("显示原文");
     ball.click();
     expect(getPageTranslationState().active).toBe(false);
-    expect(ball.textContent).toBe("译");
+    expect(ball.textContent).toBe("譯");
     expect(translationRequests()).toHaveLength(1);
   });
 
@@ -273,7 +273,7 @@ describe("floating translation interactions", () => {
     expect(ball.textContent).toBe("原");
     ball.click();
     expect(getPageTranslationState().active).toBe(false);
-    expect(ball.textContent).toBe("译");
+    expect(ball.textContent).toBe("譯");
     query("main").innerHTML = "<p>A newly loaded post after translation is stopped.</p>";
     await new Promise((resolve) => setTimeout(resolve, 220));
     expect(translationRequests()).toHaveLength(1);
@@ -295,7 +295,7 @@ describe("floating translation interactions", () => {
     expect(query<HTMLButtonElement>("[data-action='page-toggle']").disabled).toBe(false);
     expect(query("[data-action='page-toggle']").textContent).toBe("显示原文");
     ball.click();
-    expect(ball.textContent).toBe("译");
+    expect(ball.textContent).toBe("譯");
     expect(ball.getAttribute("aria-busy")).toBe("false");
     finish({ translations: ["迟到的译文"], cached: 0 });
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -313,7 +313,7 @@ describe("floating translation interactions", () => {
     ball.click();
     await vi.waitFor(() => expect(completions).toHaveLength(1));
     query<HTMLButtonElement>("[data-action='page-toggle']").click();
-    expect(ball.textContent).toBe("译");
+    expect(ball.textContent).toBe("譯");
     ball.click();
     await vi.waitFor(() => expect(completions).toHaveLength(2));
     completions[0]({ translations: ["旧译文"], cached: 0 });
@@ -361,7 +361,7 @@ describe("floating translation interactions", () => {
     }
     expect(translationRequests()).toHaveLength(4);
     pageToggle.click();
-    expect(ball.textContent).toBe("译");
+    expect(ball.textContent).toBe("譯");
     expect(pageToggle.textContent).toBe("翻译全文");
   });
 
@@ -380,7 +380,7 @@ describe("floating translation interactions", () => {
     ball.click();
     await vi.waitFor(() => expect(finishSettings).toBeTypeOf("function"));
     ball.click();
-    expect(ball.textContent).toBe("译");
+    expect(ball.textContent).toBe("譯");
     ball.click();
     await vi.waitFor(() => expect(ball.getAttribute("aria-busy")).toBe("false"));
     finishSettings(stored);

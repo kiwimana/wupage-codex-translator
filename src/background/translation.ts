@@ -69,7 +69,7 @@ async function translateConfigured(
 ): Promise<TranslateBatchResponse> {
   const { signal } = options;
   signal?.throwIfAborted();
-  const useCache = settings.cacheEnabled && options.persistentCache !== false;
+  const useCache = providerConfig.type !== "chatgpt-desktop" && settings.cacheEnabled && options.persistentCache !== false;
   const providerId = providerConfig.id;
   const provider = createProvider(providerConfig);
   const performance = getEffectiveProviderPerformance(settings, providerId);

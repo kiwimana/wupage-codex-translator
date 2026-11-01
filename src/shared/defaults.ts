@@ -3,28 +3,34 @@ import { DEFAULT_SELECTION_TRANSLATION } from "./dictionary";
 import { DEFAULT_APPEARANCE } from "./appearance";
 import { DEFAULT_SHORTCUTS, DEFAULT_SHORTCUT_ENABLED } from "./shortcuts";
 import { DEFAULT_LOCAL_SHORTCUTS } from "./local-shortcuts";
+import { CHATGPT_BUILD } from "./chatgpt-build";
 
 export const DEFAULT_SETTINGS: ExtensionSettings = {
   shortcuts: { ...DEFAULT_SHORTCUTS },
   localShortcuts: { ...DEFAULT_LOCAL_SHORTCUTS },
   shortcutEnabled: { ...DEFAULT_SHORTCUT_ENABLED },
   appearance: { ...DEFAULT_APPEARANCE, customSchemes: [] },
-  selectionTranslation: { ...DEFAULT_SELECTION_TRANSLATION },
+  selectionTranslation: { ...DEFAULT_SELECTION_TRANSLATION, ...(CHATGPT_BUILD ? { enabled: false } : {}) },
   autoTranslation: { enabled: false, nonTargetLanguage: false, presetSites: [], customSites: [] },
   frameTranslation: { enabled: true, excludeMatches: [] },
-  targetLang: "zh-CN",
+  targetLang: CHATGPT_BUILD ? "zh-TW" : "zh-CN",
   sourceLang: "auto",
-  activeProviderId: "microsoft-web-translate",
+  activeProviderId: CHATGPT_BUILD ? "chatgpt-desktop" : "microsoft-web-translate",
   chunkSize: 1200,
   concurrency: 3,
   pdfTranslationPageRadius: 5,
-  cacheEnabled: true,
+  cacheEnabled: !CHATGPT_BUILD,
+  ...(CHATGPT_BUILD ? { videoTranslation: { enabled: false, showOriginal: true, fontSize: 22 as const,
+    background: "soft" as const, preferredSource: "auto", enabledSites: [] } } : {}),
   floatingBallEnabled: true,
   contextMenuTranslationEnabled: false,
   imageTranslationEnabled: false,
   translateCodeComments: true,
   translationDisplayMode: "bilingual",
   providers: [
+    ...(CHATGPT_BUILD ? [{ type: "chatgpt-desktop" as const, id: "chatgpt-desktop",
+      label: "ChatGPT 帳號（Codex・不存對話）", enabled: true,
+      performanceMode: "custom" as const, chunkSize: 4000, concurrency: 1 }] : []),
     {
       type: "microsoft-web-translate",
       id: "microsoft-web-translate",

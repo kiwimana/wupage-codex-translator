@@ -52,7 +52,7 @@ it("reinitializes discovery after a page returns from the browser back-forward c
   await vi.advanceTimersByTimeAsync(0);
   expect(PlayerSubtitleController).toHaveBeenCalledTimes(2);
   expect(vi.mocked(PlayerSubtitleController).mock.results[1].value.start).toHaveBeenCalledOnce();
-  await expect(openVideoSubtitles()).resolves.toEqual({ opened: true });
+  await expect(openVideoSubtitles()).resolves.toMatchObject({ opened: true });
 });
 
 it("removes video controls when globally disabled and restores discovery when enabled again", async () => {
@@ -61,7 +61,7 @@ it("removes video controls when globally disabled and restores discovery when en
   const first = vi.mocked(PlayerSubtitleController).mock.results[0].value;
   changed({ [SETTINGS_KEY]: { newValue: { ...DEFAULT_SETTINGS, videoTranslation: normalizeVideoTranslation({ enabled: false }) } } }, "local");
   expect(first.dispose).toHaveBeenCalledOnce();
-  await expect(openVideoSubtitles()).resolves.toEqual({ opened: false });
+  await expect(openVideoSubtitles()).resolves.toMatchObject({ opened: false });
   document.querySelector('video')!.replaceWith(document.createElement('video'));
   await vi.advanceTimersByTimeAsync(6100);
   expect(PlayerSubtitleController).toHaveBeenCalledTimes(1);
@@ -77,7 +77,7 @@ it("keeps controls absent when a disable arrives before the initial settings rea
   changed({ [SETTINGS_KEY]: { newValue: { ...DEFAULT_SETTINGS, videoTranslation: normalizeVideoTranslation({ enabled: false }) } } }, "local");
   finish(DEFAULT_SETTINGS); await vi.advanceTimersByTimeAsync(0);
   expect(PlayerSubtitleController).not.toHaveBeenCalled();
-  await expect(openVideoSubtitles()).resolves.toEqual({ opened: false });
+  await expect(openVideoSubtitles()).resolves.toMatchObject({ opened: false });
 });
 
 it("keeps a manually enabled session when a site replaces the video element", async () => {

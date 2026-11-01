@@ -43,6 +43,22 @@ describe("provider icon picker", () => {
     expect(document.activeElement).toBe(document.querySelector(".wupage-provider-trigger"));
   });
 
+  it("keeps the list usable while a toolbar popup emits resize events", () => {
+    const select = setup(); const onChange = vi.fn(); select.addEventListener("change", onChange);
+    document.querySelector<HTMLButtonElement>(".wupage-provider-trigger")!.click();
+    const list = document.querySelector<HTMLElement>(".wupage-provider-list")!;
+    for (let index = 0; index < 10; index++) window.dispatchEvent(new Event("resize"));
+    expect(list.hidden).toBe(false); expect(onChange).not.toHaveBeenCalled();
+    const previousHeight = window.innerHeight;
+    try {
+      Object.defineProperty(window, "innerHeight", { configurable: true, value: previousHeight - 80 });
+      window.dispatchEvent(new Event("resize")); expect(list.hidden).toBe(false);
+      document.querySelector<HTMLButtonElement>("[data-value='google-web-translate']")!.click();
+      expect(select.value).toBe("google-web-translate"); expect(onChange).toHaveBeenCalledOnce();
+      expect(list.hidden).toBe(true);
+    } finally { Object.defineProperty(window, "innerHeight", { configurable: true, value: previousHeight }); }
+  });
+
   it("supports keyboard navigation, skips disabled choices and cancels without changing the value", () => {
     const select = setup();
     select.options[1].disabled = true;

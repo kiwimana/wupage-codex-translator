@@ -10,7 +10,7 @@
     <main class="popup" data-menu-loading>
       <div class="popup-top">
         <header>
-          <h1>WuPage</h1>
+          <div class="brand"><span class="brand-mark" data-wupage-icon="font" aria-hidden="true"></span><div><h1>WuPage</h1><p class="brand-description">雙語閱讀助手</p></div></div>
           <button id="openOptions" type="button" title="打开设置" aria-label="打开设置"><span data-wupage-icon="settings" aria-hidden="true"></span></button>
         </header>
         <div class="language-field">
@@ -34,15 +34,17 @@
             </div>
           </div>
         </div>
+        <div class="configuration">
         <label>
           翻译服务
           <select id="provider"></select>
         </label>
-      </div>
-      <label>
+      <label class="display-mode-field">
         翻译模式
         <select id="translationDisplayMode" disabled></select>
       </label>
+        </div>
+      </div>
       <div class="feature-toggles popup-menu-grid" role="group" aria-label="菜单功能" data-popup-menu-grid>
         <button id="contextMenuTranslation" data-popup-menu-item="contextMenuTranslation" type="button" class="feature-button" disabled title="右键点击网页，通过菜单翻译全文或恢复原文">
           <span>右键翻译</span>
@@ -82,12 +84,14 @@
         <button id="debug" data-popup-menu-item="debug" type="button" class="secondary">Debug</button>
         <button id="clearCache" data-popup-menu-item="clearCache" type="button" class="secondary">清除缓存</button>
       </div>
+      <button id="translateCc" type="button" class="secondary" aria-pressed="false" hidden disabled>AI 翻譯 CC 字幕</button>
       <span id="paragraphModeHint" class="field-description" hidden>所有网页生效；按住 Ctrl 点击段落翻译，再次点击恢复原文。</span>
       <p id="status" role="status"></p>
       <div id="fileAccessHelp" hidden>
         <p class="file-access-instructions">在扩展详情中开启「允许访问文件网址」或「允许访问文件 URL」，然后回到 PDF 重新打开 WuPage。</p>
         <button id="openFileAccessSettings" type="button" class="secondary">打开扩展设置</button>
       </div>
+      <p class="session-note" hidden><span data-wupage-icon="microchip" aria-hidden="true"></span>點擊才翻譯 · 不保存本機譯文</p>
       <div class="footer-links" data-popup-menu-footer>
         <button id="openGithub" data-popup-menu-item="openGithub" type="button" class="footer-link">
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -97,7 +101,7 @@
         </button>
         <button id="openWebsite" data-popup-menu-item="openWebsite" type="button" class="footer-link">
           <span data-wupage-icon="internet" aria-hidden="true"></span>
-          <span>官网</span>
+          <span>使用說明</span>
         </button>
       </div>
     </main>

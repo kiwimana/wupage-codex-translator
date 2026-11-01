@@ -119,6 +119,11 @@ export function getProviderUsage(provider: ProviderConfig): ProviderUsage {
       sources: [source("智谱官方模型表（含免费模型）", "https://docs.bigmodel.cn/cn/guide/start/model-overview"),
         source("智谱官方速率限制说明", "https://docs.bigmodel.cn/cn/api/rate-limit")] };
   }
+  if (provider.type === "chatgpt-desktop") return { service: "ChatGPT 帳號（Codex・不存對話）",
+    quota: "使用已登入帳號的 ChatGPT／Codex 方案額度；不需 API 金鑰。", request: "每批最多 16 段，固定 4000 字元分塊；單一長段落可能更長。",
+    rate: "以帳號及模型當下限制為準。", concurrency: "本擴充套件固定單並發。",
+    note: "不儲存本機對話紀錄與永久譯文快取；不代表服務端完全不保留資料。",
+    sources: [source("官方臨時執行說明", "https://learn.chatgpt.com/docs/non-interactive-mode")] };
   if (provider.type === "firefox-local") return { service: "Firefox 本地翻译（实验）", quota: "本地翻译，不消耗在线 API 额度；首次使用需下载或导入模型。",
     request: "受语言模型及设备内存限制。", rate: "不适用（本地翻译）。", concurrency: "不适用（本地翻译）。",
     sources: [source("Mozilla 本地翻译说明", "https://support.mozilla.org/en-US/kb/website-translation")] };

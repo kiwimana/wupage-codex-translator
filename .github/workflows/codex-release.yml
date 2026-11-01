@@ -1,0 +1,41 @@
+name: Release portable Firefox Codex packages
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Check tag and package version
+        shell: bash
+        run: |
+          node -e 'const p=require("./package.json");if(process.env.GITHUB_REF_NAME!=="v"+p.version)process.exit(1)'
+      - run: npm ci
+      - run: npm run check:public
+      - run: npm run typecheck
+      - run: npm test -- --maxWorkers=2
+      - run: npm run test:native
+      - run: python -B -m unittest discover -s tests -p 'test_public_package.py'
+      - run: npm run build:firefox:codex
+      - run: npm run package:codex
+      - name: Publish checked packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" artifacts/*.zip artifacts/SHA256SUMS.txt artifacts/PUBLICATION-CHECK.json --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" artifacts/*.zip artifacts/SHA256SUMS.txt artifacts/PUBLICATION-CHECK.json --verify-tag --title "WuPage Codex 翻譯 $GITHUB_REF_NAME" --notes-file docs/release-notes.md
+          fi

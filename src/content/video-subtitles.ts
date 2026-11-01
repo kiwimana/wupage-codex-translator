@@ -1,10 +1,11 @@
 import { PlayerSubtitleController } from "./video-player";
-import { playerContainer, queryVideoRoots, videoPlatform } from "../video/platforms";
+import { mediaKey, playerContainer, queryVideoRoots, videoPlatform } from "../video/platforms";
 import { sendRuntimeRequest } from "./runtime";
 import { normalizeVideoTranslation, videoPriority } from "../shared/video";
 import { SETTINGS_KEY } from "../shared/defaults";
 import { createSettingsSnapshot } from "../shared/settings-snapshot";
 import type { ExtensionSettings } from "../shared/types";
+import { CHATGPT_BUILD } from "../shared/chatgpt-build";
 
 let current: VideoSubtitleManager | undefined;
 let feature: { ready: Promise<void>; refresh: () => Promise<void> } | undefined;
@@ -15,8 +16,12 @@ export function initVideoSubtitles(): void {
   let disposed = false;
   const apply = (settings: ExtensionSettings) => {
     if (disposed) return;
-    if (!normalizeVideoTranslation(settings?.videoTranslation).enabled) current?.dispose();
-    else current ??= new VideoSubtitleManager();
+    const enabled = normalizeVideoTranslation(settings?.videoTranslation).enabled;
+    if (!enabled && !(CHATGPT_BUILD && videoPlatform()?.id === "youtube")) current?.dispose();
+    else {
+      current ??= new VideoSubtitleManager();
+      if (!enabled) current.stop();
+    }
   };
   const refresh = async () => { const settings = await snapshot.read(); apply(settings); };
   const changed = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
@@ -38,8 +43,15 @@ export function initVideoSubtitles(): void {
   feature.ready = refresh().catch(() => {});
 }
 
-export async function openVideoSubtitles(): Promise<{ opened: boolean }> {
-  initVideoSubtitles(); await feature?.ready; return { opened: current?.open() ?? false };
+export async function openVideoSubtitles(action: "start" | "stop" | "state" = "start"): Promise<{ opened: boolean; enabled: boolean }> {
+  if (action === "start") {
+    initVideoSubtitles(); await feature?.ready;
+    if (CHATGPT_BUILD) await feature?.refresh();
+    const opened = current?.open() ?? false;
+    return { opened, enabled: current?.enabled ?? false };
+  }
+  if (action === "stop") current?.stop();
+  return { opened: !!current, enabled: current?.enabled ?? false };
 }
 
 export class VideoSubtitleManager {
@@ -50,6 +62,7 @@ export class VideoSubtitleManager {
   private disposed = false;
   private registered = false;
   private resumePlayback = false;
+  private pageMediaKey = mediaKey();
   private readonly pagehide = (event: PageTransitionEvent) => {
     const enabled = [...this.players.values()].filter(player => player.wantsTranslation).map(player => player.video);
     this.dispose();
@@ -91,6 +104,7 @@ export class VideoSubtitleManager {
 
   refresh(): void {
     if (this.disposed) return;
+    if (CHATGPT_BUILD && this.pageMediaKey !== mediaKey()) this.stop();
     this.observer.disconnect();
     const candidates = queryVideoRoots(document, root => this.observer.observe(root, { childList: true, subtree: true }))
       .map(video => ({ video, rect: video.getBoundingClientRect() }))
@@ -136,7 +150,15 @@ export class VideoSubtitleManager {
   open(): boolean {
     this.refresh();
     const player = this.primary(); if (!player) return false;
+    this.pageMediaKey = mediaKey();
     player.video.scrollIntoView?.({ block: "nearest", inline: "nearest" }); player.open(); return true;
+  }
+
+  get enabled(): boolean { return [...this.players.values()].some(player => player.enabled); }
+
+  stop(): void {
+    this.pageMediaKey = mediaKey(); this.resumePlayback = false;
+    for (const player of this.players.values()) player.stop();
   }
 
   dispose(): void {
