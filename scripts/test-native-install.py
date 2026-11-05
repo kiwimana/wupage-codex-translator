@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import tempfile
 import struct
+import ctypes
 from concurrent.futures import ThreadPoolExecutor
 
 if os.name != 'nt':
@@ -96,8 +97,18 @@ with tempfile.TemporaryDirectory(prefix='wupage-public-install-') as temporary:
     command = ['powershell.exe', '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass',
                '-File', str(target / 'connect.ps1'), '-Engine', 'codex', '-Run']
     environment = {**os.environ, 'LOCALAPPDATA': str(local)}
+    # Windows runners can supply an 8.3 path; Get-ChildItem may return its long
+    # spelling. Both must identify the same executable, not identical strings.
+    short_buffer = ctypes.create_unicode_buffer(32768)
+    shorten = ctypes.windll.kernel32.GetShortPathNameW
+    shorten.argtypes = [ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_uint32]
+    short_length = shorten(str(local), short_buffer, len(short_buffer))
+    if 0 < short_length < len(short_buffer): environment['LOCALAPPDATA'] = short_buffer.value
     linked = subprocess.run(command, env=environment, capture_output=True, text=True, timeout=20)
-    assert linked.returncode == 0 and 'fixture-login-command:' + str(executable) in linked.stdout, linked.stderr
+    assert linked.returncode == 0, linked.stderr
+    paths = [line.removeprefix('fixture-login-command:') for line in linked.stdout.splitlines()
+             if line.startswith('fixture-login-command:')]
+    assert len(paths) == 1 and Path(paths[0]).resolve() == executable.resolve(), linked.stdout
     assert config_file.read_bytes() == original_config
     executable.unlink()
     missing = subprocess.run(command, env=environment, capture_output=True, text=True, timeout=20)
