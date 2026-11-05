@@ -11,6 +11,30 @@ export const extensionId = 'codex-translator@wupage.local';
 export const chromeOrigin = `chrome-extension://${chromeIdentity.extensionId}/`;
 export function allowedBrowser(args) { return args.includes(extensionId) || args.includes(chromeOrigin); }
 
+/** Desktop updates remove versioned CLI folders. Resolve again for each request;
+ * inspect only installed programs, never credentials or a translation session. */
+export async function resolveCodexPath(config, { localAppData = process.env.LOCALAPPDATA } = {}) {
+  const exists = async file => {
+    if (typeof file !== 'string' || !path.isAbsolute(file)) return false;
+    try { return (await fs.stat(file)).isFile(); } catch { return false; }
+  };
+  if (await exists(config.codexPath)) return config.codexPath;
+  if (typeof localAppData !== 'string' || !path.isAbsolute(localAppData)) return undefined;
+  const bin = path.join(localAppData, 'OpenAI', 'Codex', 'bin');
+  let entries;
+  try { entries = await fs.readdir(bin, { withFileTypes: true }); } catch { return undefined; }
+  const candidates = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const file = path.join(bin, entry.name, 'codex.exe');
+    if (await exists(file)) {
+      try { candidates.push({ file, modified: (await fs.stat(path.join(bin, entry.name))).mtimeMs }); } catch { /* Updating now. */ }
+    }
+  }
+  candidates.sort((a, b) => b.modified - a.modified || a.file.localeCompare(b.file));
+  return candidates[0]?.file;
+}
+
 export function validateRequest(input) {
   if (!input || input.type !== 'translate' || !Array.isArray(input.texts)
     || input.texts.length < 1 || input.texts.length > 64
@@ -139,10 +163,18 @@ export async function translate(input, signal, run = runProcess, directory = roo
     const schema = await fs.readFile(path.join(directory, 'translation-schema.json'), 'utf8');
     result = await run(config.claudePath, claudeArguments(schema, request.model), { input: translationPrompt(request), signal, env, cwd: directory });
   } else {
-    if (!path.isAbsolute(config.codexPath ?? '')) throw new Error('請先安裝 Codex 並更新橋接程式。');
-    const login = await run(config.codexPath, ['login', 'status'], { signal, env, cwd: directory });
+    const binary = await resolveCodexPath(config);
+    if (!binary) throw new Error('找不到 Codex 程式。請先啟動或完成更新 Codex 桌面版，再按「重試讀取」；仍無法偵測時請修復本機橋接。');
+    const runCodex = async (args, options) => {
+      try { return await run(binary, args, options); }
+      catch (error) {
+        if (error?.code === 'ENOENT') throw new Error('Codex 程式正在更新或已移動，請等更新完成後按「重試讀取」。');
+        throw error;
+      }
+    };
+    const login = await runCodex(['login', 'status'], { signal, env, cwd: directory });
     if (login.code !== 0 || !/logged in using chatgpt/i.test(login.stdout + login.stderr)) throw new Error('請先用 ChatGPT 帳號登入 Codex；此橋接不接受 API 金鑰登入。');
-    result = await run(config.codexPath, codexArguments(directory, request.model), { input: translationPrompt(request), signal, env, cwd: directory });
+    result = await runCodex(codexArguments(directory, request.model), { input: translationPrompt(request), signal, env, cwd: directory });
   }
   if (result.code !== 0) {
     throw new Error(/usage.limit|quota|rate.limit|429/i.test(result.stderr + result.stdout)
@@ -175,7 +207,7 @@ export function encodeMessage(message) {
 export async function manageAccount(input, signal, run = runProcess, directory = root) {
   if (!input || !['detect', 'connect'].includes(input.type) || !['codex', 'gemini', 'claude'].includes(input.engine)) throw new Error('本機工具操作格式無效。');
   const config = JSON.parse((await fs.readFile(path.join(directory, 'bridge.config.json'), 'utf8')).replace(/^\uFEFF/, ''));
-  const binary = config[`${input.engine}Path`];
+  const binary = input.engine === 'codex' ? await resolveCodexPath(config) : config[`${input.engine}Path`];
   let installed = false;
   if (typeof binary === 'string' && path.isAbsolute(binary)) {
     try { installed = (await fs.stat(binary)).isFile(); } catch { /* Not installed or moved. */ }

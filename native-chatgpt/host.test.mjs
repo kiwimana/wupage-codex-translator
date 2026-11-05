@@ -3,7 +3,82 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { accountEnvironment, allowedBrowser, chromeOrigin, claudeArguments, codexArguments, encodeMessage, extensionId, manageAccount, runGemini, runProcess, translate, validateRequest } from './host.mjs';
+import { accountEnvironment, allowedBrowser, chromeOrigin, claudeArguments, codexArguments, encodeMessage, extensionId, manageAccount, resolveCodexPath, runGemini, runProcess, translate, validateRequest } from './host.mjs';
+
+async function removeCodexFixture(directory) {
+  assert.equal(path.dirname(path.resolve(directory)), path.resolve(os.tmpdir()));
+  assert.ok(path.basename(directory).startsWith('wupage-host-test-'));
+  await fs.rm(directory, { recursive: true, force: true });
+}
+
+test('Codex discovery skips incomplete updates, respects an existing custom path and rescans after removal', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'wupage-host-test-'));
+  try {
+    const bin = path.join(dir, 'OpenAI', 'Codex', 'bin');
+    const files = [];
+    for (const [name, modified, complete] of [['old', 100, true], ['ready', 200, true], ['updating', 300, false]]) {
+      const folder = path.join(bin, name); await fs.mkdir(folder, { recursive: true });
+      if (complete) { const file = path.join(folder, 'codex.exe'); await fs.writeFile(file, 'fixture'); files.push(file); }
+      await fs.utimes(folder, modified, modified);
+    }
+    const config = { codexPath: path.join(bin, 'removed', 'codex.exe') };
+    assert.equal(await resolveCodexPath(config, { localAppData: dir }), files[1]);
+    assert.equal(await resolveCodexPath({ codexPath: process.execPath }, { localAppData: dir }), process.execPath);
+    await fs.unlink(files[1]);
+    assert.equal(await resolveCodexPath(config, { localAppData: dir }), files[0]);
+    await fs.unlink(files[0]);
+    assert.equal(await resolveCodexPath(config, { localAppData: dir }), undefined);
+    assert.equal(await resolveCodexPath(config, { localAppData: 'relative' }), undefined);
+  } finally { await removeCodexFixture(dir); }
+});
+
+test('detection and translation recover a removed Codex version without changing config or starting login', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'wupage-host-test-'));
+  const previousLocal = process.env.LOCALAPPDATA;
+  try {
+    process.env.LOCALAPPDATA = dir;
+    const binary = path.join(dir, 'OpenAI', 'Codex', 'bin', 'ready', 'codex.exe');
+    await fs.mkdir(path.dirname(binary), { recursive: true }); await fs.writeFile(binary, 'fixture');
+    const configFile = path.join(dir, 'bridge.config.json');
+    const original = JSON.stringify({ codexPath: path.join(dir, 'removed', 'codex.exe') });
+    await fs.writeFile(configFile, original);
+    const calls = [];
+    const fake = async (file, args, options) => {
+      assert.equal(file, binary); calls.push(args);
+      if (args[0] === 'login') { assert.deepEqual(args, ['login', 'status']); return { code: 0, stdout: 'Logged in using ChatGPT', stderr: '' }; }
+      assert.ok(args.includes('--ephemeral')); assert.ok(args.includes('--ignore-user-config'));
+      assert.equal(args[args.indexOf('--model') + 1], 'gpt-6-luna');
+      assert.equal(options.env.OPENAI_API_KEY, undefined);
+      return { code: 0, stdout: '{"translations":["你好"]}', stderr: '' };
+    };
+    assert.deepEqual(await manageAccount({ type: 'detect', engine: 'codex' }, undefined, fake, dir),
+      { ok: true, engine: 'codex', installed: true, login: 'unchecked', bridgeVersion: 2 });
+    assert.equal(calls.length, 0);
+    assert.deepEqual(await translate({ type: 'translate', texts: ['Hello'], targetLang: 'zh-TW', model: 'gpt-6-luna' }, undefined, fake, dir),
+      { ok: true, translations: ['你好'] });
+    assert.equal(calls.length, 2); assert.equal(await fs.readFile(configFile, 'utf8'), original);
+    await fs.unlink(binary); calls.length = 0;
+    assert.equal((await manageAccount({ type: 'detect', engine: 'codex' }, undefined, fake, dir)).installed, false);
+    await assert.rejects(translate({ type: 'translate', texts: ['Hello'], targetLang: 'zh-TW' }, undefined, fake, dir), /找不到 Codex/);
+    assert.equal(calls.length, 0);
+  } finally {
+    if (previousLocal === undefined) delete process.env.LOCALAPPDATA; else process.env.LOCALAPPDATA = previousLocal;
+    await removeCodexFixture(dir);
+  }
+});
+
+test('a Codex executable removed during startup gives a retry message without replaying translation', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'wupage-host-test-'));
+  try {
+    await fs.writeFile(path.join(dir, 'bridge.config.json'), JSON.stringify({ codexPath: process.execPath }));
+    let attempts = 0;
+    await assert.rejects(translate({ type: 'translate', texts: ['Hello'], targetLang: 'zh-TW' }, undefined, async () => {
+      if (++attempts === 1) return { code: 0, stdout: 'Logged in using ChatGPT', stderr: '' };
+      throw Object.assign(new Error('spawn removed executable ENOENT'), { code: 'ENOENT' });
+    }, dir), /正在更新或已移動/);
+    assert.equal(attempts, 2);
+  } finally { await removeCodexFixture(dir); }
+});
 
 test('accepts only this Firefox extension or the exact fixed Chrome origin', () => {
   assert.equal(allowedBrowser([extensionId]), true);

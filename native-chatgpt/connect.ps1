@@ -12,7 +12,21 @@ foreach ($name in @('OPENAI_API_KEY','CODEX_API_KEY','ANTHROPIC_API_KEY','ANTHRO
 }
 Write-Host 'WuPage: sign in with your own account. This window does not start translation.'
 switch ($Engine) {
-  'codex' { & $config.codexPath login }
+  'codex' {
+    $toolPath = $config.codexPath
+    if (-not $toolPath -or -not [IO.Path]::IsPathRooted($toolPath) -or -not (Test-Path -LiteralPath $toolPath -PathType Leaf)) {
+      $binRoot = Join-Path $env:LOCALAPPDATA 'OpenAI\Codex\bin'
+      $toolPath = $null
+      if (Test-Path -LiteralPath $binRoot -PathType Container) {
+        foreach ($versionDirectory in (Get-ChildItem -LiteralPath $binRoot -Directory | Sort-Object LastWriteTime -Descending)) {
+          $candidate = Join-Path $versionDirectory.FullName 'codex.exe'
+          if (Test-Path -LiteralPath $candidate -PathType Leaf) { $toolPath = $candidate; break }
+        }
+      }
+    }
+    if (-not $toolPath) { throw 'Codex was moved or is updating. Open the Codex desktop app, wait for its update, then retry.' }
+    & $toolPath login
+  }
   'claude' { & $config.claudePath auth login }
   'gemini' {
     if ([IO.Path]::GetExtension($config.geminiPath) -in @('.js','.mjs')) { & $config.nodePath $config.geminiPath }

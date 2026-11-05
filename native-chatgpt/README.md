@@ -24,6 +24,8 @@ Chrome 安裝時使用 `install.ps1 -Browser Chrome`，Firefox 可用 `-Browser 
 
 修復時執行 `repair.cmd`。移除時在原資料夾執行 `uninstall.ps1`，只刪除與目前安裝路徑相符的橋接登錄。`-PrepareOnly` 僅建立本機安裝檔、不變更登錄，供測試使用。
 
+Codex 桌面版更新可能刪除舊的版本資料夾。橋接在每次偵測、翻譯與開啟登入時會檢查程式是否仍存在；原路徑失效時，只在本機 Codex 桌面版的安裝目錄尋找仍有執行檔的版本。不需因這類更新重新安裝擴充，也不會自動登入或送出翻譯。若更新尚未完成，等待 Codex 可正常開啟後再按「重試讀取」。仍存在的自訂程式路徑會繼續使用。
+
 ## Chrome 開發版更新
 
 如需自動安裝 Chrome 擴充更新，執行 `install.ps1 -Browser Chrome -ChromeExtensionPath "D:\WuPage\chrome"`，指定目前 Chrome 載入、含根 `manifest.json` 的獨立擴充資料夾，再於擴充設定「擴充更新」開啟自動安裝。路徑只保存在本機的 `bridge.config.json`，不提交到 GitHub。重新執行安裝程式會保留先前指定的路徑。
