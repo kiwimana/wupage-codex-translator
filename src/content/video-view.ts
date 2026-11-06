@@ -13,6 +13,7 @@ export interface VideoViewActions {
   preferences: (patch: Partial<VideoTranslationSettings>) => void;
   import: (file: File) => void;
   offset: (seconds: number) => void;
+  panel?: (open: boolean) => void;
 }
 
 const styles = `
@@ -21,6 +22,7 @@ const styles = `
   .toolbar { position: absolute; right: 14px; top: 14px; display: flex; gap: 1px; align-items: center; color: #fff; background: #1c1928eb; border: 1px solid #ffffff29; border-radius: 9px; box-shadow: 0 3px 12px #0003; opacity: 0; transform: translateY(-3px); transition: opacity .16s,transform .16s; pointer-events: none; }
   :host([data-controls]) .toolbar, .toolbar:hover, .toolbar:focus-within, :host([data-panel]) .toolbar, :host([data-error]) .toolbar, :host([data-waiting]) .toolbar { opacity: 1; transform: none; pointer-events: auto; }
   :host([data-native-controls]:not([data-panel]):not([data-error]):not([data-waiting])) .toolbar { display: none; }
+  :host([data-native-controls][data-context-settings]) .toolbar { display: none; }
   /* Shorts reserves its top row for CC, menu and fullscreen controls. */
   :host([data-shorts]) .toolbar { top: 64px; right: 12px; }
   :host([data-shorts]) .notice { top: 108px; right: 12px; }
@@ -70,9 +72,10 @@ export class VideoView {
   private readonly notice: HTMLElement;
   private readonly retry: HTMLButtonElement;
   private noticeTimer?: ReturnType<typeof setTimeout>;
+  private panelAnchor?: HTMLElement;
   private cleanups: Array<() => void> = [];
 
-  constructor(actions: VideoViewActions, label: string) {
+  constructor(private actions: VideoViewActions, label: string) {
     this.host.id = this.id; this.host.dataset.wupageVideo = ""; this.host.setAttribute("translate", "no");
     this.root.innerHTML = `<style>${styles}</style>
       <div class="toolbar" role="group" aria-label="视频字幕翻译">
@@ -80,13 +83,13 @@ export class VideoView {
         <button class="settings" type="button" aria-label="字幕设置" title="字幕设置" aria-expanded="false">${uiIconMarkup("settings")}</button>
       </div>
       <div class="captions" role="region" aria-label="双语字幕" hidden><div class="source" dir="auto"><span></span></div><div class="translation" dir="auto"><span></span></div></div>
-      <section class="panel" popover="manual" aria-label="字幕设置" hidden>
-        <header><h2>视频字幕</h2><button class="close" type="button" aria-label="关闭字幕设置">×</button></header>
-        <div class="row"><label class="field">译为<select class="target" aria-label="字幕目标语言"></select></label><label class="field">字号<select class="font" aria-label="字幕字号"><option value="18">小</option><option value="22">中</option><option value="26">大</option></select></label></div>
+      <section class="panel" popover="manual" role="dialog" aria-label="CC 字幕設定" hidden>
+        <header><h2>CC 字幕設定</h2><button class="close" type="button" aria-label="关闭字幕设置">×</button></header>
+        <div class="row"><label class="field">译为<select class="target" aria-label="字幕目标语言"></select></label><label class="field">雙語字幕大小<select class="font" aria-label="雙語字幕大小"><option value="18">小</option><option value="22">中</option><option value="26">大</option></select></label></div>
         <label class="field">翻译服务<select class="provider" aria-label="字幕翻译服务"></select></label>
         <label class="field">原字幕<select class="track" aria-label="原字幕语言"><option value="auto">跟随播放器</option></select></label>
         <label class="check"><input class="original" type="checkbox" checked>显示原文</label>
-        <label class="check"><input class="automatic" type="checkbox">在此网站自动开启</label>
+        <label class="check"><input class="automatic" type="checkbox">在此網站自動翻譯 CC 字幕</label>
         <p class="status" role="status"></p><button class="retry" type="button" hidden>重试读取</button>
         <details><summary>更多选项</summary>
           <label class="field">字幕背景<select class="background" aria-label="字幕背景"><option value="soft">半透明</option><option value="none">透明</option></select></label>
@@ -102,7 +105,7 @@ export class VideoView {
     target.replaceChildren(...TARGET_LANGUAGES.map(language => new Option(language.label, language.code)));
     this.on(this.toggle, "click", () => actions.toggle());
     this.on(query(".settings"), "click", () => this.setPanel(this.panel.hidden));
-    this.on(query(".close"), "click", () => this.setPanel(false));
+    this.on(query(".close"), "click", () => this.dismissPanel());
     this.on(this.retry, "click", () => actions.retry());
     this.on(target, "change", () => actions.settings({ targetLang: target.value }));
     const provider = query<HTMLSelectElement>(".provider");
@@ -111,7 +114,7 @@ export class VideoView {
     const font = query<HTMLSelectElement>(".font"); this.on(font, "change", () => actions.preferences({ fontSize: Number(font.value) as 18 | 22 | 26 }));
     const original = query<HTMLInputElement>(".original"); this.on(original, "change", () => actions.preferences({ showOriginal: original.checked }));
     const background = query<HTMLSelectElement>(".background"); this.on(background, "change", () => actions.preferences({ background: background.value as "soft" | "none" }));
-    const automatic = query<HTMLInputElement>(".automatic"); this.on(automatic, "change", () => actions.preferences({ enabledSites: automatic.checked ? [label] : [] }));
+    const automatic = query<HTMLInputElement>(".automatic"); this.on(automatic, "change", () => actions.preferences({ ...(automatic.checked ? { enabled: true } : {}), ...(CHATGPT_BUILD ? { accountAutoSites: automatic.checked ? [label] : [] } : { enabledSites: automatic.checked ? [label] : [] }) }));
     const file = query<HTMLInputElement>(".file"); this.on(query(".import"), "click", () => file.click());
     this.on(file, "change", () => { if (file.files?.[0]) actions.import(file.files[0]); file.value = ""; });
     const offset = query<HTMLInputElement>(".offset"); this.on(offset, "change", () => {
@@ -119,7 +122,7 @@ export class VideoView {
       if (Number.isFinite(value)) { offset.value = String(Math.max(-30, Math.min(30, value))); actions.offset(Number(offset.value)); }
       else offset.value = "0";
     });
-    this.on(this.root, "keydown", (event: Event) => { event.stopPropagation(); if ((event as KeyboardEvent).key === "Escape") { this.setPanel(false); this.toggle.focus(); } });
+    this.on(this.root, "keydown", (event: Event) => { event.stopPropagation(); if ((event as KeyboardEvent).key === "Escape") { event.preventDefault(); this.dismissPanel(); } });
     this.on(this.root, "click", event => event.stopPropagation());
     this.on(document, "pointerdown", event => { if (!this.panel.hidden && !event.composedPath().includes(this.host)) this.setPanel(false); }, true);
   }
@@ -132,25 +135,39 @@ export class VideoView {
   focus(): void { this.setControls(true); this.toggle.focus(); }
   get panelOpen(): boolean { return !this.panel.hidden; }
 
-  setPanel(open: boolean): void {
-    if (open === !this.panel.hidden) return;
+  setPanel(open: boolean, anchor?: HTMLElement): void {
+    if (open) this.panelAnchor = anchor ?? this.panelAnchor ?? this.toggle;
+    this.host.toggleAttribute("data-context-settings", open && this.panelAnchor !== this.toggle);
+    if (open === !this.panel.hidden) { if (open) this.positionPanel(); return; }
     if (open) {
       this.panel.hidden = false;
-      this.positionPanel();
       try { this.panel.showPopover?.(); } catch { /* Fallback works in older embedded viewers. */ }
+      this.positionPanel();
+      if (anchor) this.panel.querySelector<HTMLSelectElement>(".target")?.focus({ preventScroll: true });
     } else {
       try { this.panel.hidePopover?.(); } catch { /* The panel may be outside the top layer after navigation. */ }
       this.panel.hidden = true;
+      this.panelAnchor = undefined;
     }
     this.host.toggleAttribute("data-panel", open);
     this.root.querySelector(".settings")!.setAttribute("aria-expanded", String(open));
+    this.actions.panel?.(open);
+  }
+
+  private dismissPanel(): void {
+    const anchor = this.panelAnchor ?? this.toggle;
+    this.setPanel(false);
+    if (anchor.isConnected) anchor.focus({ preventScroll: true });
   }
 
   positionPanel(): void {
-    const button = this.toggle.getBoundingClientRect();
+    const anchor = this.panelAnchor?.isConnected ? this.panelAnchor : this.toggle;
+    const button = anchor.getBoundingClientRect();
     const width = Math.min(304, innerWidth - 24);
+    const height = Math.min(this.panel.scrollHeight || 430, innerHeight - 24);
+    const top = anchor !== this.toggle ? button.top - height - 8 : button.bottom + 8;
     this.panel.style.setProperty("--wp-panel-left", `${Math.max(12, Math.min(innerWidth - width - 12, button.right - width))}px`);
-    this.panel.style.setProperty("--wp-panel-top", `${Math.max(12, Math.min(innerHeight - Math.min(this.panel.scrollHeight || 430, innerHeight - 24) - 12, button.bottom + 8))}px`);
+    this.panel.style.setProperty("--wp-panel-top", `${Math.max(12, Math.min(innerHeight - height - 12, top))}px`);
   }
 
   setState(enabled: boolean, phase: "idle" | "loading" | "active" | "waiting" | "error", message: string): void {
@@ -182,13 +199,7 @@ export class VideoView {
     this.root.querySelector<HTMLSelectElement>(".font")!.value = String(preferences.fontSize);
     this.root.querySelector<HTMLSelectElement>(".background")!.value = preferences.background;
     this.root.querySelector<HTMLInputElement>(".original")!.checked = preferences.showOriginal;
-    this.root.querySelector<HTMLInputElement>(".automatic")!.checked = preferences.enabledSites.includes(site);
-    if (CHATGPT_BUILD) {
-      const automatic = this.root.querySelector<HTMLInputElement>(".automatic")!;
-      automatic.checked = false;
-      automatic.disabled = true;
-      automatic.title = "此版本由你點擊後才開始翻譯。";
-    }
+    this.root.querySelector<HTMLInputElement>(".automatic")!.checked = (CHATGPT_BUILD ? preferences.accountAutoSites ?? [] : preferences.enabledSites).includes(site);
     this.host.style.setProperty("--wp-video-font", `${preferences.fontSize}px`);
     this.host.style.setProperty("--wp-video-bg", preferences.background === "soft" ? "#101718bf" : "transparent");
   }

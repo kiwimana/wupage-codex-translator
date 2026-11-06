@@ -78,7 +78,8 @@ export class PlayerSubtitleController {
         this.save({}, patch);
       },
       import: file => { void this.importFile(file); },
-      offset: value => { this.offset = value; this.live?.reset(); this.tick(); }
+      offset: value => { this.offset = value; this.live?.reset(); this.tick(); },
+      panel: open => this.youtubeControl?.setSettingsOpen(open)
     }, this.site);
     if (getComputedStyle(container).position === "static") {
       this.originalPosition = { value: container.style.getPropertyValue("position"), priority: container.style.getPropertyPriority("position") };
@@ -90,7 +91,8 @@ export class PlayerSubtitleController {
     container.append(this.nativeStyle, this.view.host);
     if (CHATGPT_BUILD && platform?.id === "youtube") {
       this.youtubeControl = new YouTubeAiControl(container, () => { void this.toggleYouTubeControl(); },
-        attached => this.view.host.toggleAttribute("data-native-controls", attached));
+        attached => this.view.host.toggleAttribute("data-native-controls", attached),
+        () => { this.showControls(); this.populateTracks(); this.view.setPanel(true, this.youtubeControl?.button); });
     }
     this.on(container, "pointermove", () => this.showControls());
     this.on(container, "pointerenter", () => this.showControls());
@@ -118,7 +120,7 @@ export class PlayerSubtitleController {
     void this.settingsSnapshot.read().then(settings => {
       if (this.disposed) return;
       this.applySettings(settings);
-      if (!CHATGPT_BUILD && this.preferences.enabled && !this.enabled && this.autoStart && this.preferences.enabledSites.includes(this.site) && (window === window.top || !this.video.paused)) void this.start();
+      if (!this.enabled && this.canAutoStart()) void this.start();
     }).catch(() => undefined);
   }
 
@@ -149,6 +151,16 @@ export class PlayerSubtitleController {
     this.youtubeControl?.update(this.enabled || this.controlStartPending, this.controlStartPending || this.phase === "loading", target);
   }
 
+  private canAutoStart(): boolean {
+    return this.autoStart && this.preferences.enabled && this.automaticSites(this.preferences).includes(this.site)
+      && (window === window.top || !this.video.paused)
+      && (!CHATGPT_BUILD || this.site !== "youtube" || location.pathname === "/watch" || location.pathname.startsWith("/shorts/"));
+  }
+
+  private automaticSites(preferences: VideoTranslationSettings): string[] {
+    return CHATGPT_BUILD ? preferences.accountAutoSites ?? [] : preferences.enabledSites;
+  }
+
   private async toggleYouTubeControl(): Promise<void> {
     if (this.enabled || this.controlStartPending) { this.stop(); return; }
     const action = ++this.controlActionVersion;
@@ -157,8 +169,8 @@ export class PlayerSubtitleController {
       const latest = await this.settingsSnapshot.read();
       if (this.disposed || action !== this.controlActionVersion) return;
       const preferences = normalizeVideoTranslation(latest.videoTranslation);
-      if (!preferences.enabled || !preferences.showOriginal) {
-        const settings = { ...latest, videoTranslation: { ...preferences, enabled: true, showOriginal: true, enabledSites: [] } };
+      if (!preferences.enabled) {
+        const settings = { ...latest, videoTranslation: { ...preferences, enabled: true } };
         await sendRuntimeRequest({ type: "SAVE_SETTINGS", settings });
         if (this.disposed || action !== this.controlActionVersion) return;
         this.settingsSnapshot.receive(settings);
@@ -451,6 +463,9 @@ export class PlayerSubtitleController {
   private receiveSettings(settings: ExtensionSettings): void {
     const previous = this.settings;
     this.applySettings(settings);
+    const previousVideo = normalizeVideoTranslation(previous?.videoTranslation);
+    if (!this.enabled && previous && this.canAutoStart()
+      && (!previousVideo.enabled || !this.automaticSites(previousVideo).includes(this.site))) { void this.start(); return; }
     const signature = (value: ExtensionSettings) => {
       const providerId = CHATGPT_BUILD ? accountVideoProviderId(value) : value.activeProviderId;
       return JSON.stringify([value.sourceLang, value.targetLang, providerId,
@@ -475,11 +490,12 @@ export class PlayerSubtitleController {
       const latest = await this.settingsSnapshot.read();
       if (this.disposed) return;
       const videoSettings = normalizeVideoTranslation(latest.videoTranslation);
+      const mergeSites = (current: string[] = [], next: string[]): string[] => next.includes(this.site)
+        ? [...current.filter(site => site !== this.site), this.site] : current.filter(site => site !== this.site);
       const settings = { ...latest, ...patch,
         ...(preferences ? { videoTranslation: { ...videoSettings, ...preferences, ...(preferences.enabledSites ? {
-          enabledSites: preferences.enabledSites.includes(this.site) ? [...videoSettings.enabledSites.filter(site => site !== this.site), this.site]
-            : videoSettings.enabledSites.filter(site => site !== this.site)
-        } : {}) } } : {}) };
+          enabledSites: mergeSites(videoSettings.enabledSites, preferences.enabledSites)
+        } : {}), ...(preferences.accountAutoSites ? { accountAutoSites: mergeSites(videoSettings.accountAutoSites, preferences.accountAutoSites) } : {}) } } : {}) };
       const revision = this.settingsRevision;
       await sendRuntimeRequest({ type: "SAVE_SETTINGS", settings });
       if (!this.disposed && revision === this.settingsRevision) { this.settingsSnapshot.receive(settings); this.receiveSettings(settings); }

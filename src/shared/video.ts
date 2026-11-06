@@ -12,6 +12,8 @@ export interface VideoTranslationSettings {
   background: "soft" | "none";
   preferredSource: string;
   enabledSites: string[];
+  /** Account builds require a fresh per-site opt-in; legacy rules stay manual. */
+  accountAutoSites?: string[];
 }
 
 /** Playback breaks close size ties without allowing a small autoplay ad to win. */
@@ -19,13 +21,15 @@ export function videoPriority(area: number, playing: boolean): number { return a
 
 export function normalizeVideoTranslation(value: unknown): VideoTranslationSettings {
   const data = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  const sites = (value: unknown): string[] => Array.isArray(value) ? [...new Set(value.filter((site): site is string => typeof site === "string" && /^[\w.-]{1,200}$/u.test(site)))].slice(0, 100) : [];
   return {
     enabled: data.enabled !== false,
     showOriginal: data.showOriginal !== false,
     fontSize: data.fontSize === 18 || data.fontSize === 26 ? data.fontSize : 22,
     background: data.background === "none" ? "none" : "soft",
     preferredSource: typeof data.preferredSource === "string" && /^[\w-]{1,32}$/u.test(data.preferredSource) ? data.preferredSource : "auto",
-    enabledSites: Array.isArray(data.enabledSites) ? [...new Set(data.enabledSites.filter((site): site is string => typeof site === "string" && /^[\w.-]{1,200}$/u.test(site)))].slice(0, 100) : []
+    enabledSites: sites(data.enabledSites),
+    ...(Array.isArray(data.accountAutoSites) ? { accountAutoSites: sites(data.accountAutoSites) } : {})
   };
 }
 

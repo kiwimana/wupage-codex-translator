@@ -12,7 +12,7 @@ export class YouTubeAiControl {
   // A DOM event also reaches an older copy of the module after reinjection.
   private readonly superseded = () => this.dispose();
 
-  constructor(private player: HTMLElement, toggle: () => void, private attached: (value: boolean) => void) {
+  constructor(private player: HTMLElement, toggle: () => void, private attached: (value: boolean) => void, openSettings: () => void) {
     player.dispatchEvent(new Event("wupage-ai-cc-takeover"));
     player.addEventListener("wupage-ai-cc-takeover", this.superseded);
     player.querySelectorAll('.wupage-ai-cc-button,style[data-wupage-video-style="youtube-control"]').forEach(node => node.remove());
@@ -20,9 +20,17 @@ export class YouTubeAiControl {
     this.button.className = "ytp-button wupage-ai-cc-button";
     this.button.setAttribute("data-wupage-video-control", "");
     this.button.setAttribute("data-wupage-ai-managed", "");
+    this.button.setAttribute("aria-haspopup", "dialog");
+    this.button.setAttribute("aria-expanded", "false");
     this.button.innerHTML = `${uiIconMarkup("microchip")}<span aria-hidden="true">AI</span>`;
     this.button.addEventListener("click", event => { event.preventDefault(); event.stopPropagation(); toggle(); });
+    this.button.addEventListener("contextmenu", event => {
+      event.preventDefault(); event.stopPropagation(); openSettings();
+    });
     this.button.addEventListener("keydown", event => {
+      if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
+        event.preventDefault(); event.stopPropagation(); openSettings(); return;
+      }
       if (event.key === "Enter" || event.key === " ") event.stopPropagation();
     });
     this.style.setAttribute("data-wupage-video-style", "youtube-control");
@@ -95,11 +103,13 @@ export class YouTubeAiControl {
 
   update(enabled: boolean, loading: boolean, target: string): void {
     const label = target || "設定的語言";
-    const title = loading ? `AI 正在翻譯 CC 字幕（目標：${label}），點擊可停止` : enabled ? `停止 AI CC 字幕翻譯（目標：${label}）` : `AI 翻譯 CC 字幕為${label}`;
+    const title = (loading ? `AI 正在翻譯 CC 字幕（目標：${label}），點擊可停止` : enabled ? `停止 AI CC 字幕翻譯（目標：${label}）` : `AI 翻譯 CC 字幕為${label}`) + "；右鍵開啟字幕設定";
     if (this.button.title !== title) { this.button.title = title; this.button.setAttribute("aria-label", title); }
     if (this.button.getAttribute("aria-pressed") !== String(enabled)) this.button.setAttribute("aria-pressed", String(enabled));
     if (this.button.getAttribute("aria-busy") !== String(loading)) this.button.setAttribute("aria-busy", String(loading));
   }
+
+  setSettingsOpen(open: boolean): void { this.button.setAttribute("aria-expanded", String(open)); }
 
   dispose(): void {
     if (this.disposed) return;

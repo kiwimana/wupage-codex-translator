@@ -104,7 +104,13 @@ export class VideoSubtitleManager {
 
   refresh(): void {
     if (this.disposed) return;
-    if (CHATGPT_BUILD && this.pageMediaKey !== mediaKey()) this.stop();
+    if (CHATGPT_BUILD && this.pageMediaKey !== mediaKey()) {
+      this.stop();
+      // Re-read the explicit site preference for the next video. Default manual
+      // sessions stop; opted-in sites may start on the newly discovered player.
+      for (const player of this.players.values()) player.dispose();
+      this.players.clear();
+    }
     this.observer.disconnect();
     const platform = videoPlatform();
     const containers = new Set<HTMLElement>();

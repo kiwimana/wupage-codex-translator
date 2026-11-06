@@ -39,6 +39,14 @@ async function setup(url = "https://www.youtube.com/watch?v=test", initiallyEnab
   return { button, sendMessage, settings: () => settings, phase: (value: SubtitlePhase) => { phase = value; } };
 }
 describe("manual AI CC action", () => {
+  it("preserves the right-click panel's font, original-text and automatic site preferences", async () => {
+    const state = await setup();
+    state.settings().videoTranslation = { ...state.settings().videoTranslation!, fontSize: 26, showOriginal: false, accountAutoSites: ["youtube"] };
+    await vi.waitFor(() => expect(state.button.disabled).toBe(false));
+    state.button.click();
+    await vi.waitFor(() => expect(state.button.getAttribute("aria-pressed")).toBe("true"));
+    expect(state.settings().videoTranslation).toMatchObject({ enabled: true, fontSize: 26, showOriginal: false, accountAutoSites: ["youtube"] });
+  });
   it("stays idle at startup and starts bilingual CC directly for the current tab on click", async () => {
     const state = await setup();
     await vi.waitFor(() => expect(state.button.disabled).toBe(false));

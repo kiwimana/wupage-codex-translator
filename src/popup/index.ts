@@ -785,13 +785,13 @@ async function toggleCcTranslation(): Promise<void> {
     if (!ccEnabled) {
       await savePopupSettings();
       await updatePopupSettings(latest => ({ videoTranslation: {
-        ...normalizeVideoTranslation(latest.videoTranslation), enabled: true, showOriginal: true, enabledSites: []
+        ...normalizeVideoTranslation(latest.videoTranslation), enabled: true
       } }));
     }
     const result = await sendRuntimeMessage<VideoSubtitleState>({ type: "OPEN_VIDEO_SUBTITLES", tabId: activeTabId, action: ccEnabled ? "stop" : "start" });
     ccEnabled = result.enabled === true;
     ccPhase = result.phase ?? (ccEnabled ? "active" : "idle");
-    setStatus(ccEnabled ? "AI 雙語字幕已啟動。字幕準備中可能暫停影片，完成後會繼續播放。" : "AI 字幕翻譯已停止，已恢復原字幕。");
+    setStatus(ccEnabled ? "AI 字幕翻譯已啟動。字幕準備中可能暫停影片，完成後會繼續播放。" : "AI 字幕翻譯已停止，已恢復原字幕。");
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error));
   } finally {
