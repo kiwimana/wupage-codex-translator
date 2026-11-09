@@ -29,6 +29,7 @@ export function subtitleMenuPlacement(input: {
   player: VideoBox; anchor: VideoBox; viewport: VideoBox; width: number; contentHeight: number;
   shorts: boolean; fullscreen: boolean; fallback: boolean;
   caption?: VideoBox;
+  avoid?: VideoBox[];
 }): { left: number; top: number; width: number; height: number; maxHeight: number; side: "inside" | "left" | "right" } {
   const { player, anchor, viewport, shorts, fullscreen, fallback } = input;
   const width = Math.min(input.width, Math.max(0, viewport.width - 24));
@@ -37,8 +38,13 @@ export function subtitleMenuPlacement(input: {
   let left = anchor.right - width, top = fallback ? anchor.bottom + 8 : anchor.top - height - 10;
   let side: "inside" | "left" | "right" = "inside";
   if (!fullscreen && (shorts || player.width > 0 && player.width < 640)) {
-    if (viewport.right - player.right >= width + 24) { left = player.right + 12; top = anchor.top; side = "right"; }
-    else if (player.left - viewport.left >= width + 24) { left = player.left - width - 12; top = anchor.top; side = "left"; }
+    const y = clamp(anchor.top, viewport.top + 12, viewport.bottom - height - 12);
+    const candidate = (x: number): VideoBox => ({ left: x, top: y, width, height, right: x + width, bottom: y + height });
+    let rightStart = player.right + 12, leftStart = player.left - width - 12;
+    for (const rect of [...(input.avoid ?? [])].sort((a, b) => a.left - b.left)) if (intersects(candidate(rightStart), rect)) rightStart = rect.right + 12;
+    for (const rect of [...(input.avoid ?? [])].sort((a, b) => b.right - a.right)) if (intersects(candidate(leftStart), rect)) leftStart = rect.left - width - 12;
+    if (rightStart + width <= viewport.right - 12) { left = rightStart; top = y; side = "right"; }
+    else if (leftStart >= viewport.left + 12) { left = leftStart; top = y; side = "left"; }
   }
   if (side === "inside" && !fallback && player.width > width) left = Math.min(viewport.right, player.right) - width - 12;
   if (shorts && side === "inside" && input.caption && fallback) {

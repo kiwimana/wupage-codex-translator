@@ -640,14 +640,15 @@ export class PlayerSubtitleController {
     const layoutKey = [rect.left, rect.top, rect.width, rect.height, scaleX, scaleY, shorts, !!fullscreen, location.pathname, location.search].join(":");
     if (this.platform?.id === "youtube" && (refreshUi || layoutKey !== this.uiLayoutKey)) {
       this.uiLayoutKey = layoutKey; this.uiLayoutAt = Date.now();
-      const scope = shorts ? this.container.closest("ytd-reel-video-renderer,yt-shorts-player") ?? this.container : this.container;
+      const scope = shorts ? this.container.closest("ytd-reel-video-renderer") ?? this.container.closest("yt-shorts-player") ?? this.container : this.container;
       const boxes = (selector: string, root: Element = scope) => Array.from(root.querySelectorAll<HTMLElement>(selector)).slice(0, 12).map(element => element.getBoundingClientRect());
+      const rails = boxes(".ytShortsVideoActionBarViewModelHost,.reel-player-actions,#actions");
       const area = subtitleInsets(rect, shorts,
         boxes(".ytReelPlayerHeaderViewModelHost,.reel-player-header,.ytp-chrome-top"),
         boxes(".ytReelPlayerMetadataViewModelHost,.reel-player-metadata-container,.reel-player-overlay-metadata,.metadata-container"),
-        boxes(".ytShortsVideoActionBarViewModelHost,.reel-player-actions,#actions"),
+        rails,
         boxes(".ytp-chrome-bottom,.ytp-right-controls", this.container));
-      this.view.safeArea(area.toolbarTop / (scaleY || 1), area.bottom / (scaleY || 1), area.left, area.right);
+      this.view.safeArea(area.toolbarTop / (scaleY || 1), area.bottom / (scaleY || 1), area.left, area.right, rails);
     }
     if (this.view.panelOpen) this.view.positionPanel();
   }

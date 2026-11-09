@@ -126,6 +126,8 @@ const styles = `
     :host([data-shorts]) .captions { font-size:clamp(12px,var(--wp-video-font,22px),6cqw); padding:7px 10px; gap:3px; }
     :host([data-shorts]) .source { font-size:clamp(12px,var(--wp-source-font,22px),6cqw); }
   }
+  .panel { container-type:inline-size; container-name:wupage-menu; }
+  @container wupage-menu (max-width:240px) { .quick-controls { grid-template-columns:minmax(0,1fr); } .settings-content .row { flex-direction:column; } }
 `;
 
 export class VideoView {
@@ -146,6 +148,7 @@ export class VideoView {
   private cleanups: Array<() => void> = [];
   private captionInsets = { left: 5, right: 5 };
   private menuBounds?: VideoBox;
+  private nativeAvoid: VideoBox[] = [];
 
   constructor(private actions: VideoViewActions, label: string) {
     this.host.id = this.id; this.host.dataset.wupageVideo = ""; this.host.setAttribute("translate", "no");
@@ -328,7 +331,7 @@ export class VideoView {
     const desiredWidth = this.panel.dataset.page === "menu" ? 288 : 352;
     this.panel.style.width = `${Math.min(desiredWidth, Math.max(0, viewport.width - 24))}px`;
     const placement = subtitleMenuPlacement({ player, anchor: button, viewport, shorts, fullscreen: !!document.fullscreenElement, fallback: anchor === this.toggle,
-      width: desiredWidth, contentHeight: this.panel.scrollHeight ? this.panel.scrollHeight + 2 : 430, caption: this.caption.hidden ? undefined : this.caption.getBoundingClientRect() });
+      width: desiredWidth, contentHeight: this.panel.scrollHeight ? this.panel.scrollHeight + 2 : 430, caption: this.caption.hidden ? undefined : this.caption.getBoundingClientRect(), avoid: this.nativeAvoid });
     this.panel.style.width = `${placement.width}px`; this.panel.style.maxHeight = `${placement.maxHeight}px`;
     this.panel.dataset.side = placement.side;
     this.panel.style.setProperty("--wp-panel-left", `${placement.left}px`); this.panel.style.setProperty("--wp-panel-top", `${placement.top}px`);
@@ -336,8 +339,9 @@ export class VideoView {
     this.positionCaptions();
   }
 
-  safeArea(toolbarTop: number, bottom: number, left: number, right: number): void {
+  safeArea(toolbarTop: number, bottom: number, left: number, right: number, avoid: VideoBox[] = []): void {
     this.captionInsets = { left, right };
+    this.nativeAvoid = avoid;
     this.css("--wp-toolbar-top", `${toolbarTop}px`); this.css("--wp-caption-safe-bottom", `${bottom}px`);
     this.positionCaptions();
   }

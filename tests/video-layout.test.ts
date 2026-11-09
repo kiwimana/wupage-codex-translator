@@ -25,6 +25,14 @@ describe("responsive subtitle placement", () => {
   it("uses the left side when the right side is too narrow", () => {
     const result = subtitleMenuPlacement({ ...base, player: box(900, 40, 280, 640) });expect(result.side).toBe("left");expect(result.left).toBe(600);
   });
+  it("places the outside menu beyond native Shorts actions rather than on top of them", () => {
+    const rail = box(792, 260, 48, 180), result = subtitleMenuPlacement({ ...base, avoid: [rail] });
+    expect(result.side).toBe("right");expect(result.left).toBe(852);
+  });
+  it("switches sides when the native actions leave insufficient room on the right", () => {
+    const rail = box(792, 260, 48, 180), result = subtitleMenuPlacement({ ...base, viewport: box(0, 0, 1100, 900), avoid: [rail] });
+    expect(result.side).toBe("left");expect(result.left + result.width).toBeLessThan(base.player.left);
+  });
   it("also frees a small long-video player instead of covering it with settings", () => {
     expect(subtitleMenuPlacement({ ...base, player: box(20, 20, 500, 280), shorts: false, fallback: false }).side).toBe("right");
   });
