@@ -95,14 +95,14 @@ const styles = `
   :host([data-menu-control]) .toggle[aria-busy="true"] .mark svg { visibility:hidden; }
   :host([data-menu-control]) .toggle[aria-busy="true"] .mark { border:2px solid #d3bfff; border-right-color:transparent; }
   :host([data-shorts]) .captions { bottom:max(var(--wp-video-bottom,8%),112px); max-width:calc(100% - 32px); padding:9px 13px; border-radius:10px; }
-  .panel { width:min(304px,calc(100vw - 24px)); padding:16px; border-radius:16px; background:#171717fa; border-color:#ffffff20; font-size:13px; box-shadow:0 12px 40px #0007; scrollbar-width:thin; scrollbar-color:#626262 transparent; }
+  .panel { width:min(288px,calc(100vw - 24px)); padding:16px; border-radius:14px; background:#171717fa; border-color:#ffffff20; font-size:13px; box-shadow:0 12px 40px #0007; scrollbar-width:thin; scrollbar-color:#626262 transparent; }
   .panel[data-page="settings"],.panel[data-page="download"] { width:min(352px,calc(100vw - 24px)); }
   .panel header { top:-16px; padding-top:3px; margin-bottom:4px; background:#171717; }
   .panel h2 { font-size:14px; font-weight:600; }
   .close { width:28px; height:28px; display:grid; place-items:center; padding:5px; border-radius:50%; }
   .close svg { width:16px; height:16px; } .close:hover,.back:hover { background:#ffffff15; }
   .service-summary { margin:0 0 12px; color:#aaa; font:11px/1.5 system-ui,sans-serif; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .quick-controls { display:grid; grid-template-columns:minmax(0,1.7fr) minmax(0,1fr); gap:10px; padding:10px; margin:0 0 10px; background:#ffffff08; border:1px solid #ffffff0d; border-radius:10px; }
+  .quick-controls { display:grid; grid-template-columns:minmax(0,1fr) minmax(82px,.7fr); gap:10px; padding:10px; margin:0 0 10px; background:#ffffff08; border:1px solid #ffffff0d; border-radius:10px; }
   .quick-controls .field { margin:0; font-size:11px; color:#aaa; gap:5px; } .quick-controls select { background:#242424; border-color:#424242; height:34px; font-size:12px; }
   .menu-row { min-height:44px; padding:10px 9px; font-size:13px; border-radius:8px; }
   .menu-row:hover { background:#ffffff12; } .session { background:#c8b3ff18; color:#e0d1ff; margin-bottom:5px; }
@@ -118,6 +118,10 @@ const styles = `
   .session[aria-busy="true"] svg { animation:none; display:none; } .busy-spinner { display:none; width:17px; height:17px; border:2px solid #dacaff; border-right-color:transparent; border-radius:50%; flex-shrink:0; }
   .session[aria-busy="true"] .busy-spinner { display:block; animation:wupage-cc-spin 780ms linear infinite; }
   @media(prefers-reduced-motion:reduce) { .busy-spinner { animation:none!important; } }
+  .subtitle-policies { border:0; margin:12px 0; padding:0 0 10px; border-bottom:1px solid #ffffff16; }
+  .subtitle-policies legend { color:#ddd; font-size:12px; margin-bottom:4px; }
+  .subtitle-policies .check { margin:10px 0 2px; font-size:12px; }
+  .policy-help { margin:0 0 8px 22px; color:#999; font:11px/1.6 system-ui,sans-serif; }
 `;
 
 export class VideoView {
@@ -167,6 +171,14 @@ export class VideoView {
         <label class="field">背景不透明度 <output class="opacity-value">88%</output><input class="background-opacity" type="range" min="0" max="100" value="88"></label>
         <label class="field">字幕距底部 <output class="bottom-value">8%</output><input class="bottom-offset" type="range" min="0" max="40" value="8"></label>
         <details class="advanced-settings"><summary>字幕來源與進階樣式</summary>
+          <fieldset class="subtitle-policies"><legend>字幕處理</legend>
+            <label class="check"><input class="prefer-human" type="checkbox" checked>優先人工字幕</label>
+            <p class="policy-help">優先同語言人工原字幕；有目標語言人工譯文時直接使用，不送 AI。</p>
+            <label class="check"><input class="optimize-sentences" type="checkbox" checked>基本分句最佳化</label>
+            <p class="policy-help">在本機整理英文自動字幕片段與分句；不適用即時畫面字幕。</p>
+            <label class="check"><input class="dialogue-only" type="checkbox">只翻譯對話內容</label>
+            <p class="policy-help">略過音樂、掌聲等已知音效註記；不確定的括號文字仍保留。</p>
+          </fieldset>
           <label class="field">翻译服务<select class="provider" aria-label="字幕翻译服务"></select></label>
           <label class="field">原字幕<select class="track" aria-label="原字幕语言"><option value="auto">跟随播放器</option></select></label>
           <div class="row"><label class="field">字體<select class="font-family"><option value="system">系統黑體</option><option value="serif">襯線字體</option><option value="monospace">等寬字體</option></select></label><label class="field">字重<select class="font-weight"><option value="normal">一般</option><option value="bold">粗體</option></select></label></div>
@@ -225,6 +237,9 @@ export class VideoView {
     }
     this.on(query(".reset-style"), "click", () => actions.preferences({ fontSize: 26, sourceFontSize: undefined, showOriginal: true, subtitleOrder: "original-first", fontFamily: "system", fontWeight: "bold", sourceColor: "#ffffff", translationColor: "#ffffff", background: "soft", backgroundOpacity: 88, bottomOffset: 8 }));
     const original = query<HTMLInputElement>(".original"); this.on(original, "change", () => actions.preferences({ showOriginal: original.checked }));
+    for (const [selector, key] of [[".prefer-human", "preferHumanSubtitles"], [".optimize-sentences", "optimizeSentences"], [".dialogue-only", "dialogueOnly"]] as const) {
+      const input = query<HTMLInputElement>(selector); this.on(input, "change", () => actions.preferences({ [key]: input.checked }));
+    }
     const background = query<HTMLSelectElement>(".background"); this.on(background, "change", () => actions.preferences({ background: background.value as VideoTranslationSettings["background"] }));
     const automatic = query<HTMLInputElement>(".automatic"); this.on(automatic, "change", () => actions.preferences({ ...(automatic.checked ? { enabled: true } : {}), ...(CHATGPT_BUILD ? { accountAutoSites: automatic.checked ? [label] : [] } : { enabledSites: automatic.checked ? [label] : [] }) }));
     const file = query<HTMLInputElement>(".file"); this.on(query(".import"), "click", () => file.click());
@@ -298,7 +313,7 @@ export class VideoView {
   positionPanel(): void {
     const anchor = this.panelAnchor?.isConnected ? this.panelAnchor : this.toggle;
     const button = anchor.getBoundingClientRect();
-    const width = Math.min(this.panel.dataset.page === "menu" ? 304 : 352, innerWidth - 24);
+    const width = Math.min(this.panel.dataset.page === "menu" ? 288 : 352, innerWidth - 24);
     this.host.style.setProperty("--wp-open-panel-width", `${width}px`);
     const player = this.host.getBoundingClientRect(), shorts = this.host.hasAttribute("data-shorts");
     const maxHeight = Math.max(120, Math.min(innerHeight - 24, shorts && player.height > 144 ? player.height - 24 : innerHeight - 24));
@@ -324,8 +339,9 @@ export class VideoView {
     if (session.getAttribute("aria-pressed") !== String(enabled)) session.setAttribute("aria-pressed", String(enabled));
     if (session.getAttribute("aria-busy") !== String(enabled && phase === "loading")) session.setAttribute("aria-busy", String(enabled && phase === "loading"));
     this.setText(this.root.querySelector(".session-label")!, enabled ? "停止本次字幕翻譯" : "僅本次開啟字幕翻譯");
-    this.toggle.title = CHATGPT_BUILD ? "AI 字幕；左鍵或右鍵開啟字幕設定" : enabled ? "停止字幕翻译" : "翻译视频字幕";
-    this.setText(this.label, CHATGPT_BUILD ? phase === "loading" ? "載入中" : phase === "error" ? "重試字幕" : "AI 字幕" : !enabled ? "字幕翻译" : phase === "loading" ? "读取字幕…" : phase === "error" ? "字幕需重试" : phase === "waiting" ? "等待原字幕" : "双语已开");
+    const human = enabled && this.host.dataset.subtitleTranslation === "human";
+    this.toggle.title = CHATGPT_BUILD ? `${human ? "人工雙語字幕・未使用 AI" : "AI 字幕"}；左鍵或右鍵開啟字幕設定` : enabled ? "停止字幕翻译" : "翻译视频字幕";
+    this.setText(this.label, CHATGPT_BUILD ? human ? "雙語字幕" : phase === "loading" ? "載入中" : phase === "error" ? "重試字幕" : "AI 字幕" : !enabled ? "字幕翻译" : phase === "loading" ? "读取字幕…" : phase === "error" ? "字幕需重试" : phase === "waiting" ? "等待原字幕" : "双语已开");
     this.setText(this.status, message); this.retry.hidden = !enabled || !["waiting", "error"].includes(phase);
   }
 
@@ -354,6 +370,9 @@ export class VideoView {
     this.root.querySelector<HTMLSelectElement>(".quick-font")!.value = String(preferences.fontSize);
     this.root.querySelector<HTMLSelectElement>(".background")!.value = preferences.background;
     this.root.querySelector<HTMLInputElement>(".original")!.checked = preferences.showOriginal;
+    this.root.querySelector<HTMLInputElement>(".prefer-human")!.checked = preferences.preferHumanSubtitles !== false;
+    this.root.querySelector<HTMLInputElement>(".optimize-sentences")!.checked = preferences.optimizeSentences !== false;
+    this.root.querySelector<HTMLInputElement>(".dialogue-only")!.checked = preferences.dialogueOnly === true;
     this.root.querySelector<HTMLInputElement>(".automatic")!.checked = (CHATGPT_BUILD ? preferences.accountAutoSites ?? [] : preferences.enabledSites).includes(site);
     this.host.style.setProperty("--wp-video-font", `${preferences.fontSize}px`);
     this.host.style.setProperty("--wp-source-font", `${preferences.sourceFontSize ?? preferences.fontSize}px`);

@@ -38,13 +38,13 @@ export class YouTubeAiControl {
     this.style.textContent = `
       .ytp-right-controls .wupage-ai-cc-button {
         display: inline-flex !important; align-items: center !important; justify-content: center !important;
-        gap: 3px !important; width: 52px !important; min-width: 44px !important; height: 100% !important;
+        gap: 3px !important; width: 44px !important; min-width: 44px !important; height: 100% !important;
         box-sizing: border-box !important; padding: 0 4px !important; border: 0 !important;
         position: relative !important; vertical-align: top !important; cursor: pointer !important;
         color: #fff !important; background: transparent !important; opacity: 1 !important;
-        font: 700 13px/1 system-ui,sans-serif !important; text-shadow: 0 1px 2px #000;
+        font: 600 11px/1 system-ui,sans-serif !important; text-shadow: 0 1px 2px #000;
       }
-      .wupage-ai-cc-button > svg { position: static !important; width: 19px !important; height: 19px !important; box-sizing: border-box !important; padding: 0 !important; border: 0 !important; margin: 0 !important; transform: none !important; flex: 0 0 19px !important; fill: currentColor !important; }
+      .wupage-ai-cc-button > svg { position: static !important; width: 17px !important; height: 17px !important; box-sizing: border-box !important; padding: 0 !important; border: 0 !important; margin: 0 !important; transform: none !important; flex: 0 0 17px !important; fill: currentColor !important; }
       .wupage-ai-cc-button > span { position: static !important; display: inline-block !important; width: auto !important; height: auto !important; margin: 0 !important; padding: 0 !important; transform: none !important; color: inherit !important; font: inherit !important; white-space: nowrap !important; pointer-events: none; }
       .ytp-right-controls .wupage-ai-cc-button[aria-pressed="true"] { color: #d3bfff !important; }
       .ytp-right-controls .wupage-ai-cc-button[data-wupage-ai-retired] { display: none !important; pointer-events: none !important; }
@@ -52,7 +52,7 @@ export class YouTubeAiControl {
         content: ""; position: absolute; bottom: 8%; left: 18%; right: 18%; height: 2px; border-radius: 2px; background: currentColor;
       }
       .wupage-ai-cc-button[aria-busy="true"] > svg { visibility: hidden !important; }
-      .wupage-ai-cc-button[aria-busy="true"]::before { content: ""; position: absolute; left: calc(50% - 19px); top: calc(50% - 8px); box-sizing: border-box; width: 16px; height: 16px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: wupage-ai-cc-spin 780ms linear infinite; pointer-events: none; }
+      .wupage-ai-cc-button[aria-busy="true"]::before { content: ""; position: absolute; left: calc(50% - 17px); top: calc(50% - 8px); box-sizing: border-box; width: 16px; height: 16px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: wupage-ai-cc-spin 780ms linear infinite; pointer-events: none; }
       .wupage-ai-cc-button:focus-visible { outline: 2px solid #d3bfff !important; outline-offset: -3px; }
       @keyframes wupage-ai-cc-spin { to { transform: rotate(360deg); } }
       @media (prefers-reduced-motion: reduce) { .wupage-ai-cc-button::before { animation: none !important; } }
@@ -108,9 +108,9 @@ export class YouTubeAiControl {
     this.shorts = value; this.mount();
   }
 
-  update(enabled: boolean, loading: boolean, target: string): void {
+  update(enabled: boolean, loading: boolean, target: string, human = false): void {
     const label = target || "設定的語言";
-    const title = (loading ? `AI 正在翻譯 CC 字幕（目標：${label}）` : enabled ? `AI CC 字幕翻譯中（目標：${label}）` : `AI 字幕（目標：${label}）`) + "；左鍵或右鍵開啟字幕設定";
+    const title = (human && enabled ? `人工雙語字幕（目標：${label}，未使用 AI）` : loading ? `AI 正在翻譯 CC 字幕（目標：${label}）` : enabled ? `AI CC 字幕翻譯中（目標：${label}）` : `AI 字幕（目標：${label}）`) + "；左鍵或右鍵開啟字幕設定";
     if (this.button.title !== title) { this.button.title = title; this.button.setAttribute("aria-label", title); }
     if (this.button.getAttribute("aria-pressed") !== String(enabled)) this.button.setAttribute("aria-pressed", String(enabled));
     if (this.button.getAttribute("aria-busy") !== String(loading)) this.button.setAttribute("aria-busy", String(loading));

@@ -5,16 +5,17 @@ import { SETTINGS_KEY } from "../shared/defaults";
 import { TARGET_LANGUAGES } from "../shared/languages";
 import { createSettingsSnapshot } from "../shared/settings-snapshot";
 import type { ExtensionSettings } from "../shared/types";
-import { normalizeVideoTranslation, sameVideoLanguage, type VideoTranslationSettings, type SubtitlePhase } from "../shared/video";
+import { normalizeVideoTranslation, type VideoTranslationSettings, type SubtitlePhase } from "../shared/video";
 import { loadPageSubtitles, pageSubtitleCatalogue } from "../video/bridge-client";
 import { captionElements, mediaKey, renderedCaption, selectedNativeTrack, type VideoPlatform } from "../video/platforms";
 import type { PageSubtitleCatalogue } from "../video/site-cues";
-import { MAX_SUBTITLE_FILE_BYTES, parseSubtitles, SubtitleTranslator, subtitleText, type SubtitleCue } from "../video/subtitles";
+import { MAX_SUBTITLE_FILE_BYTES, parseSubtitles, SubtitleTranslator, subtitleText, type SubtitleCue, type SubtitlePlayback } from "../video/subtitles";
 import { LiveSubtitleTranslator } from "../video/live-subtitles";
 import { CHATGPT_BUILD } from "../shared/chatgpt-build";
 import { YouTubeAiControl } from "./youtube-ai-control";
 import { accountVideoProviderId } from "../shared/desktop-account";
 import { SubtitleArchive, serializeSubtitles, type SubtitleExportMode, type SubtitleExportFormat } from "../video/subtitle-export";
+import { dialogueText, humanSubtitlePairs, humanTargetTrack, HumanSubtitlePlayback, originalSubtitleTrack, prepareSubtitleCues } from "../video/subtitle-policies";
 
 export class PlayerSubtitleController {
   readonly view: VideoView;
@@ -24,7 +25,10 @@ export class PlayerSubtitleController {
   private settings?: ExtensionSettings;
   private readonly settingsSnapshot = createSettingsSnapshot(() => sendRuntimeRequest<ExtensionSettings>({ type: "GET_SETTINGS" }));
   private preferences = normalizeVideoTranslation(undefined);
-  private timeline?: SubtitleTranslator;
+  private timeline?: SubtitlePlayback;
+  private usingHumanTranslation = false;
+  private loadedHumanTrack = "";
+  private filteredRenderedSound = false;
   private nativeTrack?: TextTrack;
   private timelineHasCues = false;
   private live?: LiveSubtitleTranslator;
@@ -152,7 +156,7 @@ export class PlayerSubtitleController {
 
   private refreshYouTubeControl(): void {
     const target = TARGET_LANGUAGES.find(language => language.code === this.settings?.targetLang)?.label ?? this.settings?.targetLang ?? "";
-    this.youtubeControl?.update(this.enabled || this.controlStartPending, this.controlStartPending || this.phase === "loading", target);
+    this.youtubeControl?.update(this.enabled || this.controlStartPending, this.controlStartPending || this.phase === "loading", target, this.usingHumanTranslation);
   }
 
   private canAutoStart(): boolean {
@@ -197,7 +201,7 @@ export class PlayerSubtitleController {
     this.clearSession(false); this.enabled = true; this.phase = "loading"; this.started = Date.now();
     const epoch = ++this.epoch;
     const controller = new AbortController(); this.controller = controller;
-    this.key = mediaKey(); this.catalogue = undefined; this.loadedPageTrack = ""; this.nativeAttempts = 0;
+    this.key = mediaKey(); this.catalogue = undefined; this.loadedPageTrack = ""; this.loadedHumanTrack = ""; this.nativeAttempts = 0;
     this.view.setState(true, "loading", "正在读取播放器字幕…"); this.showControls();
     this.refreshYouTubeControl();
     try {
@@ -207,9 +211,13 @@ export class PlayerSubtitleController {
       if (!this.preferences.enabled) { this.stop(); return; }
       const provider = this.settings!.providers.find(entry => entry.id === this.settings!.activeProviderId);
       if (!provider || provider.enabled === false) throw new Error("请先选择可用的翻译服务。");
-      this.clock = setInterval(() => this.tick(), 120);
+      const pageSource = this.platform?.bridge && !this.source.startsWith("native:") && this.source !== "file";
+      // Wait for the catalogue before making any AI request when a human
+      // translation may already exist. Explicit native/file sources stay explicit.
+      if (pageSource && this.preferences.preferHumanSubtitles !== false) await this.readPageTrack(epoch);
+      if (!this.valid(epoch)) return;
       if (this.imported && this.source === "file") this.useTimeline(() => this.imported?.cues ?? [], settings.sourceLang);
-      else {
+      else if (!this.timeline) {
         const tracks = this.nativeTracks();
         const track = this.source.startsWith("native:") ? tracks[Number(this.source.slice(7))]
           : this.source.startsWith("page:") ? undefined
@@ -217,8 +225,9 @@ export class PlayerSubtitleController {
         if (track) this.useNative(track);
         else if (!this.source.startsWith("page:")) this.useRendered();
       }
+      this.clock = setInterval(() => this.tick(), 120);
       this.populateTracks(); this.tick();
-      if (this.platform?.bridge && !this.source.startsWith("native:") && this.source !== "file") {
+      if (pageSource && this.preferences.preferHumanSubtitles === false) {
         await this.readPageTrack(epoch);
       }
       if (this.valid(epoch)) { this.phase = "active"; this.tick(); }
@@ -252,24 +261,33 @@ export class PlayerSubtitleController {
           text: subtitleText("text" in cue ? String(cue.text) : "") })).filter(cue => cue.text && cue.text.length <= 4000) : [];
       }
       return cues;
-    }, track.language || this.settings!.sourceLang);
+    }, track.language || this.settings!.sourceLang, /auto[- ]?generated|自動產生|自动生成/iu.test(track.label), `native:${this.nativeTracks().indexOf(track)}:${track.label}`);
     this.nativeTrack = track;
   }
 
-  private useTimeline(cues: () => SubtitleCue[], language: string): void {
-    this.originalCues = cues; this.prepareArchive(language);
+  private processed(cues: () => SubtitleCue[], language: string, automatic: boolean): () => SubtitleCue[] {
+    let previous: SubtitleCue[] | undefined; let result: SubtitleCue[] = [];
+    return () => { const value = cues(); if (value !== previous) { previous = value; result = prepareSubtitleCues(value, { language, automatic, optimize: this.preferences.optimizeSentences !== false, dialogueOnly: this.preferences.dialogueOnly === true }); } return result; };
+  }
+
+  private useTimeline(cues: () => SubtitleCue[], language: string, automatic = false, identity = this.source): void {
+    this.originalCues = cues; this.prepareArchive(language, identity); this.usingHumanTranslation = false;
+    this.view.host.dataset.subtitleTranslation = "ai";
     this.nativeTrack = undefined;
     this.view.host.dataset.subtitleSource = "timeline";
     this.timeline?.dispose(); this.live?.dispose(); this.requests?.cancel();
     this.live = undefined; this.sourceLanguage = language;
     this.requests = new VideoRequests(this.settings!, language);
     const requests = this.requests;
+    const read = this.processed(cues, language, automatic);
     this.timeline = new SubtitleTranslator(() => {
-      const value = cues(); this.timelineHasCues = value.length > 0; return value;
+      const value = read(); this.timelineHasCues = cues().length > 0; return value;
     }, (texts, signal) => requests.translate(texts, signal), () => this.paint(), this.slowAi ? 90 : 15, completed => this.archive.add(completed));
   }
 
   private useRendered(): void {
+    this.usingHumanTranslation = false;
+    this.view.host.dataset.subtitleTranslation = "ai";
     this.originalCues = undefined; this.prepareArchive(this.settings!.sourceLang);
     this.nativeTrack = undefined;
     this.view.host.dataset.subtitleSource = "live";
@@ -301,18 +319,35 @@ export class PlayerSubtitleController {
       this.catalogue = catalogue; this.populateTracks();
       const preferred = this.preferences.preferredSource !== "auto" ? this.preferences.preferredSource : this.settings!.sourceLang;
       const selected = this.source.startsWith("page:") ? catalogue.tracks.find(track => track.id === this.source.slice(5)) :
-        catalogue.tracks.find(track => track.id === catalogue.selected) || catalogue.tracks.find(track => preferred !== "auto" && track.language.startsWith(preferred.split("-")[0]))
-        || catalogue.tracks.find(track => sameVideoLanguage(track.language, "en") && !track.automatic)
-        || catalogue.tracks.find(track => sameVideoLanguage(track.language, "en")) || catalogue.tracks[0];
+        originalSubtitleTrack(catalogue, preferred, this.preferences.preferHumanSubtitles !== false);
       if (!selected) {
         if (this.source.startsWith("page:")) throw new Error("所选字幕已移除。");
         return;
       }
-      if (this.loadedPageTrack === selected.id) return;
-      const payload = await loadPageSubtitles(selected.id, this.controller?.signal);
+      const human = this.preferences.preferHumanSubtitles !== false ? humanTargetTrack(catalogue, this.settings!.targetLang) : undefined;
+      if (this.loadedPageTrack === selected.id && this.loadedHumanTrack === (human?.id ?? "")) return;
+      const [payload, translated] = await Promise.all([
+        loadPageSubtitles(selected.id, this.controller?.signal),
+        human && human.id !== selected.id ? loadPageSubtitles(human.id, this.controller?.signal).catch(() => undefined) : Promise.resolve(undefined)
+      ]);
       if (!this.valid(epoch)) return;
       if (payload.key !== this.key || !payload.cues.length) throw new Error("所选字幕没有返回内容。");
-      this.loadedPageTrack = selected.id; this.useTimeline(() => payload.cues, selected.language); this.phase = "active"; this.tick();
+      this.loadedPageTrack = selected.id;
+      const target = human?.id === selected.id ? payload : translated;
+      const usableHuman = !!human && target?.key === this.key && !!target.cues.length;
+      // A failed human track is retried by an explicit retry, not every poll:
+      // repeatedly replacing a working AI session would cancel its own results.
+      this.loadedHumanTrack = human?.id ?? "";
+      this.useTimeline(() => payload.cues, selected.language, selected.automatic === true, `page:${selected.id}:${this.loadedHumanTrack}`);
+      if (usableHuman) {
+        this.timeline?.dispose(); this.requests?.cancel(); this.requests = undefined;
+        const source = this.processed(() => payload.cues, selected.language, selected.automatic === true)();
+        const destination = this.processed(() => target!.cues, human!.language, false)();
+        this.usingHumanTranslation = true; this.view.host.dataset.subtitleTranslation = "human";
+        this.archive.add(humanSubtitlePairs(source, destination));
+        this.timeline = new HumanSubtitlePlayback(source, destination, () => this.paint());
+      }
+      this.phase = "active"; this.tick();
     } catch {
       if (this.valid(epoch) && this.source.startsWith("page:")) {
         this.sourceError = "未能读取所选原字幕。请在网站播放器开启对应语言，或选择「跟随播放器」后重试。";
@@ -359,7 +394,11 @@ export class PlayerSubtitleController {
         }
       }
       if (this.timeline) this.timeline.update(this.video.currentTime - this.offset);
-      else { this.enableRenderedCaptions(); this.live?.update(renderedCaption(this.container, this.platform)); }
+      else {
+        this.enableRenderedCaptions(); const text = renderedCaption(this.container, this.platform);
+        const filtered = this.preferences.dialogueOnly ? dialogueText(text) : text;
+        this.filteredRenderedSound = !!text && !filtered; this.live?.update(filtered);
+      }
       if (this.platform?.bridge && this.source === "auto" && !this.imported && !this.advertising()
         && Date.now() - this.lastCatalogue > (this.platform.id === "youtube" ? 3500 : 20_000)) void this.readPageTrack(this.epoch);
       this.paint();
@@ -373,7 +412,7 @@ export class PlayerSubtitleController {
     const value = this.timeline?.current() ?? this.live?.current() ?? { source: "", translation: "" };
     const error = this.sourceError || this.timeline?.error || this.live?.error;
     if (this.advertising() || this.video.seeking || Date.now() < this.suppressUntil) { this.clearCaption(); return; }
-    if (this.slowAi && value.source && !value.translation && !error) {
+    if (this.slowAi && !this.usingHumanTranslation && value.source && !value.translation && !error) {
       if (!this.video.paused && !this.video.ended) {
         this.resumeAfterBuffer = true;
         this.video.pause();
@@ -384,10 +423,11 @@ export class PlayerSubtitleController {
     this.hideNative(!!value.translation);
     this.renderNativeFullscreen(value.source, value.translation);
     if (error) { this.phase = "error"; this.state(`翻译暂不可用：${error}`); }
-    else if (this.slowAi && value.source && !value.translation) {
+    else if (this.slowAi && !this.usingHumanTranslation && value.source && !value.translation) {
       this.phase = "loading";
       this.state(this.resumeAfterBuffer ? "AI 正在準備雙語字幕，完成後會繼續播放…" : "AI 正在翻譯 CC 字幕…");
     }
+    else if (!this.timeline && this.filteredRenderedSound) { this.phase = "active"; this.state("音效註記已略過，等待對話字幕。"); }
     else if (!value.source && Date.now() - this.started > 2500 && !this.loadedPageTrack && (!this.timeline || !this.timelineHasCues)) {
       const message = this.timeline ? "原字幕尚未就绪，请先在播放器开启字幕，或选择其他原字幕语言。"
         : this.platform?.id === "bilibili" ? "请先在播放器开启字幕。部分字幕需要登录后才能使用。" : "请先开启播放器的 CC / 字幕，播放后会自动翻译。";
@@ -396,7 +436,7 @@ export class PlayerSubtitleController {
     } else if (this.phase !== "loading" || !!value.translation) {
       this.phase = "active";
       const target = TARGET_LANGUAGES.find(language => language.code === this.settings?.targetLang)?.label ?? this.settings?.targetLang;
-      this.state(`${this.platform?.label ?? "视频字幕"} · ${target} · ${this.video.paused ? "已暂停" : "翻译中"}`);
+      this.state(`${this.platform?.label ?? "视频字幕"} · ${target} · ${this.usingHumanTranslation ? "人工字幕・未使用 AI" : this.video.paused ? "已暂停" : "翻译中"}`);
     }
   }
 
@@ -477,7 +517,8 @@ export class PlayerSubtitleController {
     const signature = (value: ExtensionSettings) => {
       const providerId = CHATGPT_BUILD ? accountVideoProviderId(value) : value.activeProviderId;
       return JSON.stringify([value.sourceLang, value.targetLang, providerId,
-        value.providers.find(provider => provider.id === providerId), normalizeVideoTranslation(value.videoTranslation).preferredSource]);
+        value.providers.find(provider => provider.id === providerId), normalizeVideoTranslation(value.videoTranslation).preferredSource,
+        normalizeVideoTranslation(value.videoTranslation).preferHumanSubtitles !== false, normalizeVideoTranslation(value.videoTranslation).optimizeSentences !== false, normalizeVideoTranslation(value.videoTranslation).dialogueOnly === true]);
     };
     if (previous && signature(previous) !== signature(settings)) {
       this.archive.clear(); this.cancelDownload();
@@ -525,9 +566,9 @@ export class PlayerSubtitleController {
     } catch (error) { this.view.tell(error instanceof Error ? error.message : String(error)); }
   }
 
-  private prepareArchive(language: string): void {
+  private prepareArchive(language: string, identity = this.source): void {
     const provider = this.settings?.providers.find(entry => entry.id === this.settings?.activeProviderId);
-    this.archive.setContext(JSON.stringify([mediaKey(), this.source, language, this.settings?.targetLang, this.settings?.activeProviderId,
+    this.archive.setContext(JSON.stringify([mediaKey(), this.source, identity, language, this.settings?.targetLang, this.settings?.activeProviderId,
       provider && "model" in provider ? provider.model : undefined, provider && "engine" in provider ? provider.engine : undefined]));
   }
 
@@ -603,6 +644,9 @@ export class PlayerSubtitleController {
 
   private clearSession(restoreNative = true): void {
     this.resumeBufferedPlayback();
+    this.usingHumanTranslation = false;
+    this.filteredRenderedSound = false;
+    delete this.view.host.dataset.subtitleTranslation;
     this.nativeTrack = undefined;
     this.sourceError = "";
     this.view.host.dataset.subtitleSource = "none";

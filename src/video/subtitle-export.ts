@@ -27,7 +27,7 @@ export class SubtitleArchive {
     }
   }
   private store(key: string, cue: TranslatedSubtitleCue): void {
-    if (!Number.isFinite(cue.start) || !Number.isFinite(cue.end) || cue.start < 0 || cue.end <= cue.start || !cue.text || !cue.translation) return;
+    if (!Number.isFinite(cue.start) || !Number.isFinite(cue.end) || cue.start < 0 || cue.end <= cue.start || !cue.translation) return;
     const count = cue.text.length + cue.translation.length;
     if (count > 2 * 1024 * 1024) return;
     const previous = this.records.get(key);
@@ -40,7 +40,7 @@ export class SubtitleArchive {
   }
   cues(mode: SubtitleExportMode, translationFirst = false): SubtitleCue[] {
     return [...this.records.values()].sort((a, b) => a.start - b.start).map(cue => ({ start: cue.start, end: cue.end,
-      text: mode === "original" ? cue.text : mode === "translation" ? cue.translation : translationFirst ? `${cue.translation}\n${cue.text}` : `${cue.text}\n${cue.translation}` }));
+      text: mode === "original" ? cue.text : mode === "translation" ? cue.translation : (translationFirst ? [cue.translation, cue.text] : [cue.text, cue.translation]).filter(Boolean).join("\n") }));
   }
 }
 

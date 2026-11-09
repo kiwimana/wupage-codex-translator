@@ -50,5 +50,6 @@ export function parseCatalogue(value: unknown): PageSubtitleCatalogue | undefine
   const tracks = value.tracks.filter((track): track is unknown & PageSubtitleTrack => record(track)
     && typeof track.id === "string" && track.id.length <= 128 && typeof track.label === "string" && track.label.length <= 200
     && typeof track.language === "string" && track.language.length <= 32);
-  return { key: value.key, tracks, ...(typeof value.selected === "string" ? { selected: value.selected } : {}) };
+  return { key: value.key, tracks: tracks.map(track => ({ id: track.id, label: track.label, language: track.language,
+    ...(typeof track.automatic === "boolean" ? { automatic: track.automatic } : {}) })), ...(typeof value.selected === "string" ? { selected: value.selected } : {}) };
 }

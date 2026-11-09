@@ -4,6 +4,19 @@ import { VIDEO_BRIDGE_CHANNEL } from "../src/video/site-cues";
 
 afterEach(() => { document.body.replaceChildren(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
+it('does not label ASR or machine-translated target tracks as human when kind metadata is absent', async () => {
+  vi.resetModules();vi.stubGlobal('location', new URL('https://www.youtube.com/watch?v=fixture'));document.body.innerHTML='<div id="movie_player"></div>';
+  Object.assign(document.querySelector('#movie_player')!, {getPlayerResponse:()=>({videoDetails:{videoId:'fixture'},captions:{playerCaptionsTracklistRenderer:{captionTracks:[
+    {baseUrl:'https://www.youtube.com/api/timedtext?v=fixture&lang=en',languageCode:'en',vssId:'human'},
+    {baseUrl:'https://www.youtube.com/api/timedtext?v=fixture&lang=en&kind=asr',languageCode:'en',vssId:'auto'},
+    {baseUrl:'https://www.youtube.com/api/timedtext?v=fixture&lang=en&tlang=zh-Hant',languageCode:'zh-Hant',vssId:'machine'}
+  ]}}})});
+  vi.stubGlobal('performance',{getEntriesByType:()=>[]});let listener!:EventListener;
+  vi.spyOn(window,'addEventListener').mockImplementation((type,callback)=>{if(type==='message')listener=callback as EventListener;});const post=vi.spyOn(window,'postMessage').mockImplementation(()=>{});
+  await import('../src/video/page-bridge');listener(new MessageEvent('message',{source:window,origin:location.origin,data:{channel:VIDEO_BRIDGE_CHANNEL,direction:'request',id:'wp-human-check',action:'catalogue'}}));
+  for(let i=0;i<30;i++)await Promise.resolve();expect(post.mock.calls.at(-1)?.[0].data.tracks.map((t:{id:string;automatic:boolean})=>[t.id,t.automatic])).toEqual([['human',false],['auto',true],['machine',true]]);
+});
+
 it('reports the original subtitle language selected in the Bilibili player', async () => {
   vi.resetModules(); vi.stubGlobal('location', new URL('https://www.bilibili.com/video/BVfixture/'));
   document.body.innerHTML = '<div class="bpx-player-ctrl-subtitle-major"><div class="bpx-state-active" data-lan="zh-CN"></div></div>';
@@ -24,18 +37,18 @@ it('reports the original subtitle language selected in the Bilibili player', asy
   }
 });
 
-it("reuses the player's complete authorized caption request, including its client context", async () => {
+it.each([false, true])("reuses only the matching human/ASR authorized caption request (human=%s)", async human => {
   vi.resetModules();
   vi.stubGlobal("location", new URL("https://www.youtube.com/watch?v=fixture"));
   document.body.innerHTML = '<div id="movie_player"></div>';
   Object.assign(document.querySelector('#movie_player')!, { getPlayerResponse: () => ({
     videoDetails: { videoId: 'fixture' }, captions: { playerCaptionsTracklistRenderer: { captionTracks: [{
-      baseUrl: 'https://www.youtube.com/api/timedtext?v=fixture&lang=en', languageCode: 'en', vssId: '.en'
+      baseUrl: 'https://www.youtube.com/api/timedtext?v=fixture&lang=en'+(human?'&name=human':''), languageCode: 'en', vssId: '.en'
     }] } }
   }) });
   vi.stubGlobal('performance', { getEntriesByType: () => [{ startTime: 1,
-    name: 'https://www.youtube.com/api/timedtext?v=fixture&lang=en&pot=proof&c=WEB&cver=123&fmt=json3'
-  }] });
+    name: 'https://www.youtube.com/api/timedtext?v=fixture&lang=en&pot=proof&c=WEB&cver=123&fmt=json3'+(human?'&name=human':'')
+  }, { startTime: 2, name: 'https://www.youtube.com/api/timedtext?v=fixture&lang=en&pot=wrong-asr&kind=asr&fmt=json3' }] });
   const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({ events: [{ tStartMs: 0, dDurationMs: 2000, segs: [{ utf8: 'Hello' }] }] })));
   vi.stubGlobal('fetch', fetchMock);
   let listener!: EventListener;

@@ -24,6 +24,9 @@ export interface VideoTranslationSettings {
   translationColor?: string;
   backgroundOpacity?: number;
   bottomOffset?: number;
+  preferHumanSubtitles?: boolean;
+  optimizeSentences?: boolean;
+  dialogueOnly?: boolean;
 }
 
 /** Playback breaks close size ties without allowing a small autoplay ad to win. */
@@ -40,6 +43,9 @@ export function normalizeVideoTranslation(value: unknown): VideoTranslationSetti
     preferredSource: typeof data.preferredSource === "string" && /^[\w-]{1,32}$/u.test(data.preferredSource) ? data.preferredSource : "auto",
     enabledSites: sites(data.enabledSites),
     ...(Array.isArray(data.accountAutoSites) ? { accountAutoSites: sites(data.accountAutoSites) } : {}),
+    ...(typeof data.preferHumanSubtitles === "boolean" ? { preferHumanSubtitles: data.preferHumanSubtitles } : {}),
+    ...(typeof data.optimizeSentences === "boolean" ? { optimizeSentences: data.optimizeSentences } : {}),
+    ...(typeof data.dialogueOnly === "boolean" ? { dialogueOnly: data.dialogueOnly } : {}),
     ...(SUBTITLE_FONT_SIZES.includes(data.sourceFontSize as SubtitleFontSize) ? { sourceFontSize: data.sourceFontSize as SubtitleFontSize } : {}),
     ...(data.subtitleOrder === "original-first" || data.subtitleOrder === "translation-first" ? { subtitleOrder: data.subtitleOrder } : {}),
     ...(data.fontFamily === "system" || data.fontFamily === "serif" || data.fontFamily === "monospace" ? { fontFamily: data.fontFamily } : {}),

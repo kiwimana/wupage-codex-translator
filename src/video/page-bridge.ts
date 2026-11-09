@@ -85,9 +85,10 @@ async function readCatalogue(): Promise<{ key: string; tracks: PageSubtitleTrack
     if (response?.videoDetails?.videoId && response.videoDetails.videoId !== currentId) return { key, tracks: [] };
     const current = player?.getOption?.("captions", "track");
     for (const [index, track] of (response?.captions?.playerCaptionsTracklistRenderer?.captionTracks ?? []).slice(0, 200).entries()) {
-      if (!track.baseUrl || !permitted(track.baseUrl, "captions")) continue;
+      const captionUrl = track.baseUrl && permitted(track.baseUrl, "captions");
+      if (!captionUrl) continue;
       const id = track.vssId || `${track.languageCode}-${index}`;
-      next.push({ id, language: (track.languageCode ?? "auto").slice(0, 32), automatic: track.kind === "asr", url: track.baseUrl,
+      next.push({ id, language: (track.languageCode ?? "auto").slice(0, 32), automatic: track.kind === "asr" || captionUrl.searchParams.get("kind") === "asr" || captionUrl.searchParams.has("tlang"), url: captionUrl.href,
         label: (track.name?.simpleText || track.name?.runs?.map(run => run.text ?? "").join("") || track.languageCode || "字幕").slice(0, 200) });
       if (current?.vss_id === track.vssId || (!selected && current?.languageCode === track.languageCode)) selected = id;
     }
@@ -101,7 +102,7 @@ async function readCatalogue(): Promise<{ key: string; tracks: PageSubtitleTrack
           const url = track.subtitle_url && bilibiliSubtitleUrl(track.subtitle_url);
           if (!url || !permitted(url, "captions")) continue;
           next.push({ id: String(track.id_str || track.id || index), label: String(track.lan_doc || track.lan || "字幕").slice(0, 200),
-            language: String(track.lan || "auto").replace(/^ai-/u, "").slice(0, 32), url: new URL(url, location.href).href });
+            language: String(track.lan || "auto").replace(/^ai-/u, "").slice(0, 32), automatic: /^ai-/u.test(track.lan ?? ""), url: new URL(url, location.href).href });
         }
         if (next.length) break;
       } catch { /* The rendered-caption adapter remains available without metadata access. */ }
@@ -126,6 +127,8 @@ async function load(id: string): Promise<unknown> {
       const candidate = permitted(entry.url, "captions");
       return entry.key === key && candidate?.searchParams.has("pot") && candidate.searchParams.get("v") === url.searchParams.get("v")
         && candidate.searchParams.get("lang") === url.searchParams.get("lang")
+        && candidate.searchParams.get("kind") === url.searchParams.get("kind")
+        && candidate.searchParams.get("name") === url.searchParams.get("name")
         && candidate.searchParams.get("tlang") === url.searchParams.get("tlang");
     });
     if (observed) {

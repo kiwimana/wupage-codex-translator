@@ -45,6 +45,14 @@ export function parseSubtitles(source: string): SubtitleCue[] {
 }
 
 /** The scheduler is independent of playback events, so late responses never select a stale cue. */
+export interface SubtitlePlayback {
+  error: string;
+  update(time: number): void;
+  current(): { source: string; translation: string };
+  retry(): void;
+  dispose(): void;
+}
+
 export class SubtitleTranslator {
   private readonly cache = new Map<string, string>();
   private time = 0;
