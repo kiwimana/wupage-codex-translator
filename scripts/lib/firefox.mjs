@@ -29,7 +29,7 @@ export async function startFirefox(output, extension, preferences = {}) {
   const binary = process.env.FIREFOX_BINARY || (process.platform === 'win32'
     ? 'C:/Program Files/Mozilla Firefox/firefox.exe' : 'firefox');
   const child = spawn(binary, ['--headless', '--no-remote', '--wait-for-browser', '--profile', profile,
-    '--marionette', '--remote-allow-system-access'], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    '--marionette', '--remote-allow-system-access'], { windowsHide: true, env: { ...process.env, MOZ_HEADLESS: '1' }, stdio: ['ignore', 'pipe', 'pipe'] });
   let log = '';
   child.stdout.on('data', data => { log += data; });
   child.stderr.on('data', data => { log += data; });
@@ -38,7 +38,9 @@ export async function startFirefox(output, extension, preferences = {}) {
   let socket;
   for (let attempt = 0; attempt < 150; attempt++) {
     if (launchError) throw launchError;
-    if (child.exitCode !== null) throw new Error(`Firefox exited (${child.exitCode}): ${log}`);
+    // Windows can finish the launcher successfully before its browser child is
+    // ready. Keep waiting for this profile's port when the launcher exits zero.
+    if (child.exitCode !== null && child.exitCode !== 0) throw new Error(`Firefox exited (${child.exitCode}): ${log}`);
     try {
       socket = await new Promise((resolve, reject) => {
         const candidate = net.createConnection({ port, host: '127.0.0.1' });

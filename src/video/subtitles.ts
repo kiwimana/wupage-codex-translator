@@ -57,7 +57,8 @@ export class SubtitleTranslator {
     private readonly readCues: () => SubtitleCue[],
     private readonly translate: (texts: string[], signal?: AbortSignal) => Promise<string[]>,
     private readonly changed: () => void,
-    private readonly lookaheadSeconds = 15
+    private readonly lookaheadSeconds = 15,
+    private readonly completed?: (cues: Array<SubtitleCue & { translation: string }>) => void
   ) {}
 
   update(time: number): void {
@@ -99,6 +100,10 @@ export class SubtitleTranslator {
         throw new Error("翻译服务返回的字幕不完整，请重试。");
       }
       texts.forEach((text, index) => { this.cache.delete(text); this.cache.set(text, result[index]); });
+      if (this.completed) {
+        const translated = new Map(texts.map((text, index) => [text, result[index]]));
+        this.completed(this.readCues().filter(cue => translated.has(cue.text)).map(cue => ({ ...cue, translation: translated.get(cue.text)! })));
+      }
       while (this.cache.size > 256) this.cache.delete(this.cache.keys().next().value!);
     } catch (error) {
       if (!this.disposed && !controller.signal.aborted) this.error = error instanceof Error ? error.message : String(error);

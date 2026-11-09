@@ -88,17 +88,17 @@ try{
  const control=await evaluate(video.session,`(()=>{const b=document.querySelector('.wupage-ai-cc-button');b.setAttribute('aria-busy','true');return {next:b.nextElementSibling.className,animation:getComputedStyle(b,'::before').animationName};})()`);
  assert.equal(control.next,'ytp-settings-button');assert.equal(control.animation,'wupage-ai-cc-spin');
  check('YouTube player AI button is mounted before Settings and its loading circle renders in Chrome');
- await evaluate(video.session,`document.querySelector('.wupage-ai-cc-button').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,button:2}));true`);
+ await evaluate(video.session,`document.querySelector('.wupage-ai-cc-button').click();true`);
  await waitFor(()=>evaluate(video.session,`document.querySelector('[data-wupage-video]')?.shadowRoot.querySelector('.panel')?.matches(':popover-open')`));
  const contextMenu=await evaluate(video.session,`(()=>{const host=document.querySelector('[data-wupage-video]'),root=host.shadowRoot,panel=root.querySelector('.panel'),r=panel.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:innerWidth,height:innerHeight,toolbarHidden:getComputedStyle(root.querySelector('.toolbar')).display==='none',automaticOff:!root.querySelector('.automatic').checked,automaticAvailable:!root.querySelector('.automatic').disabled};})()`);
  assert.ok(contextMenu.left>=0&&contextMenu.right<=contextMenu.width&&contextMenu.top>=0&&contextMenu.bottom<=contextMenu.height,JSON.stringify(contextMenu));
  assert.equal(contextMenu.toolbarHidden,true);assert.equal(contextMenu.automaticOff,true);assert.equal(contextMenu.automaticAvailable,true);
- await evaluate(video.session,`(()=>{const root=document.querySelector('[data-wupage-video]').shadowRoot,font=root.querySelector('.font');font.value='26';font.dispatchEvent(new Event('change'));return true;})()`);
+ await evaluate(video.session,`(()=>{const root=document.querySelector('[data-wupage-video]').shadowRoot;root.querySelector('.open-settings').click();const font=root.querySelector('.font');font.value='26';font.dispatchEvent(new Event('change'));return true;})()`);
  await waitFor(()=>api(`return (await chrome.runtime.sendMessage({type:'GET_SETTINGS'})).data.videoTranslation.fontSize===26;`));
  const settingsShot=await send('Page.captureScreenshot',{format:'png'},video.session);await fs.writeFile(path.join(output,'chrome-video-context-settings.png'),Buffer.from(settingsShot.data,'base64'));
  await evaluate(video.session,`document.querySelector('[data-wupage-video]').shadowRoot.querySelector('.close').click();true`);
  assert.equal(await evaluate(video.session,`document.querySelector('.wupage-ai-cc-button').getAttribute('aria-expanded')`),'false');
- check('right-click opens an unclipped settings dialog, offers opt-in automatic CC and saves font size without translating');
+ check('left-click opens the compact menu; its settings dialog saves font size without translating');
  for(let i=0;i<4;i++){
   await evaluate(video.session,`(()=>{const bar=document.querySelector('.ytp-right-controls');bar.replaceWith(bar.cloneNode(true));document.dispatchEvent(new Event('yt-navigate-finish'));return true;})()`);
   await waitFor(()=>evaluate(video.session,`document.querySelectorAll('.wupage-ai-cc-button').length===1`));await delay(200);

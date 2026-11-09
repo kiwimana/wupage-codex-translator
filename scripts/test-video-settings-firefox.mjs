@@ -1,4 +1,4 @@
-// Isolated profile, local YouTube-shaped page, no subtitles or AI account calls.
+// Isolated profile, local captions and downloads; no AI account calls.
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -12,24 +12,32 @@ const server=createServer((_req,res)=>res.writeHead(200,{'content-type':'text/ht
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const url=`http://www.youtube.com:${server.address().port}/watch?v=settings-fixture`;
 const report={passed:false,loginActions:0,translationRequests:0,checks:[]};let firefox;
+const downloadDirectory=await fs.mkdtemp(path.join(output,'downloads-'));
 async function waitFor(script){for(let i=0;i<100;i++){const result=await firefox.execute(script);if(result)return result;await delay(100);}throw new Error('Firefox settings UI did not settle');}
 async function readSettings(){return JSON.parse(await firefox.executeAsync(`const done=arguments[arguments.length-1];window.wrappedJSObject.chrome.runtime.sendMessage({type:'GET_SETTINGS'}).then(r=>done(JSON.stringify(r.data)));`));}
 try{
- firefox=await startFirefox(output,path.join(root,'dist-firefox-chatgpt'),{'network.dns.localDomains':'www.youtube.com','network.dns.disableIPv6':true,'network.stricttransportsecurity.preloadlist':false,'network.proxy.type':0,'dom.security.https_only_mode':false});
+ firefox=await startFirefox(output,path.join(root,'dist-firefox-chatgpt'),{'network.dns.localDomains':'www.youtube.com','network.dns.disableIPv6':true,'network.stricttransportsecurity.preloadlist':false,'network.proxy.type':0,'dom.security.https_only_mode':false,'browser.download.folderList':2,'browser.download.dir':downloadDirectory,'browser.download.useDownloadDir':true,'browser.download.always_ask_before_handling_new_types':false,'browser.helperApps.neverAsk.saveToDisk':'application/x-subrip,text/vtt,text/plain'});
  await firefox.command('WebDriver:SetWindowRect',{width:1100,height:900});
  await firefox.command('WebDriver:Navigate',{url});
  await waitFor(`return !!document.querySelector('.wupage-ai-cc-button');`);
- await firefox.execute(`document.querySelector('.wupage-ai-cc-button').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,button:2}));`);
+ await firefox.execute(`const track=document.querySelector('video').addTextTrack('captions','English','en');track.mode='hidden';track.addCue(new VTTCue(0,4,'Hello from original CC.'));document.querySelector('.wupage-ai-cc-button').click();`);
  await waitFor(`return document.querySelector('[data-wupage-video]')?.shadowRoot.querySelector('.panel')?.matches(':popover-open');`);
  const bounds=JSON.parse(await firefox.execute(`const host=document.querySelector('[data-wupage-video]'),root=host.shadowRoot,panel=root.querySelector('.panel'),r=panel.getBoundingClientRect();return JSON.stringify({left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:innerWidth,height:innerHeight,toolbarHidden:getComputedStyle(root.querySelector('.toolbar')).display==='none',automaticOff:!root.querySelector('.automatic').checked,automaticAvailable:!root.querySelector('.automatic').disabled,pressed:document.querySelector('.wupage-ai-cc-button').getAttribute('aria-pressed')});`));
  assert.ok(bounds.left>=0&&bounds.top>=0&&bounds.right<=bounds.width&&bounds.bottom<=bounds.height,JSON.stringify(bounds));
  assert.equal(bounds.toolbarHidden,true);assert.equal(bounds.automaticOff,true);assert.equal(bounds.automaticAvailable,true);assert.equal(bounds.pressed,'false');
- report.checks.push('right-click opens the actual Firefox popover with automatic CC off and no duplicate toolbar');
- await firefox.execute(`const root=document.querySelector('[data-wupage-video]').shadowRoot,font=root.querySelector('.font');font.value='26';font.dispatchEvent(new Event('change'));`);
- await waitFor(`return document.querySelector('[data-wupage-video]').style.getPropertyValue('--wp-video-font')==='26px';`);
+ report.checks.push('left-click opens the compact Firefox menu without translating or showing duplicate controls');
+ await firefox.execute(`const root=document.querySelector('[data-wupage-video]').shadowRoot;root.querySelector('.source span').textContent='Would you like to take a seat?';root.querySelector('.translation span').textContent='你想坐下來休息一下嗎？';root.querySelector('.captions').hidden=false;`);
+ const menuShot=await firefox.command('WebDriver:TakeScreenshot',{full:false});await fs.writeFile(path.join(output,'firefox-video-main-menu.png'),Buffer.from(menuShot.value??menuShot,'base64'));
+ await firefox.execute(`const root=document.querySelector('[data-wupage-video]').shadowRoot;root.querySelector('.open-settings').click();const font=root.querySelector('.font');font.value='32';font.dispatchEvent(new Event('change'));`);
+ await waitFor(`return document.querySelector('[data-wupage-video]').style.getPropertyValue('--wp-video-font')==='32px';`);
  const shot=await firefox.command('WebDriver:TakeScreenshot',{full:false});
  await fs.writeFile(path.join(output,'firefox-video-context-settings.png'),Buffer.from(shot.value??shot,'base64'));
- await firefox.execute(`document.querySelector('[data-wupage-video]').shadowRoot.querySelector('.target').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));`);
+ await firefox.execute(`const root=document.querySelector('[data-wupage-video]').shadowRoot;root.querySelector('.back').click();root.querySelector('.open-download').click();root.querySelector('.download-mode').value='original';root.querySelector('.save-subtitles').click();`);
+ let downloaded;
+ for(let i=0;i<100;i++){const names=await fs.readdir(downloadDirectory);const file=names.find(name=>name.endsWith('.srt'));if(file){downloaded=await fs.readFile(path.join(downloadDirectory,file),'utf8');if(downloaded.includes('Hello from original CC.'))break;}await delay(100);}
+ assert.ok(downloaded?.includes('00:00:00,000 --> 00:00:04,000'),String(downloaded));
+ report.checks.push('original SRT downloads to the isolated test folder with valid timestamps and no translation');
+ await firefox.execute(`document.querySelector('[data-wupage-video]').shadowRoot.querySelector('.download-mode').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));`);
  assert.equal(await firefox.execute(`return document.querySelector('[data-wupage-video]').shadowRoot.querySelector('.panel').hidden;`),true);
  assert.equal(await firefox.execute(`return document.activeElement===document.querySelector('.wupage-ai-cc-button');`),true);
  await firefox.command('WebDriver:SetWindowRect',{width:430,height:760});
@@ -39,7 +47,7 @@ try{
  report.checks.push('Shift+F10 opens the panel on a narrow viewport; Escape restores native-button focus');
  await firefox.command('WebDriver:Navigate',{url:firefox.base+'options.html'});
  await waitFor(`return !!window.wrappedJSObject.chrome?.runtime;`);
- const settings=await readSettings();assert.equal(settings.videoTranslation.fontSize,26);assert.equal(settings.videoTranslation.accountAutoSites?.length??0,0);
+ const settings=await readSettings();assert.equal(settings.videoTranslation.fontSize,32);assert.equal(settings.videoTranslation.accountAutoSites?.length??0,0);
  const debug=JSON.parse(await firefox.executeAsync(`const done=arguments[arguments.length-1];window.wrappedJSObject.chrome.runtime.sendMessage({type:'GET_TRANSLATION_DEBUG'}).then(r=>done(JSON.stringify(r)));`));
  assert.equal(debug.data.tasks.length,0);report.checks.push('font choice persists without enabling automatic translation or making translation requests');
  report.browser=firefox.session.capabilities.browserVersion;report.passed=true;console.log(JSON.stringify(report));

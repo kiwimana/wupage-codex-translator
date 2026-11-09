@@ -19,6 +19,7 @@ type SettingsListener=(changes:Record<string,chrome.storage.StorageChange>,area:
 const changed=new Set<SettingsListener>();
 const flush=async()=>{for(let i=0;i<50;i++)await Promise.resolve();};
 const button=()=>document.querySelector<HTMLButtonElement>('.ytp-right-controls .wupage-ai-cc-button')!;
+const sessionClick=()=>{button().click();document.querySelector('[data-wupage-video]')!.shadowRoot!.querySelector<HTMLButtonElement>('.session')!.click();};
 beforeEach(async()=>{
   vi.useFakeTimers();settings={...structuredClone(DEFAULT_SETTINGS),targetLang:'ja'};
   vi.stubGlobal('location',new URL('https://www.youtube.com/watch?v=fixture'));
@@ -46,6 +47,43 @@ it('shows one idle button before the gear and starts no translation on discovery
   expect(button().nextElementSibling?.className).toBe('ytp-settings-button');
   expect(button().getAttribute('aria-pressed')).toBe('false');
   expect(vi.mocked(sendRuntimeRequest).mock.calls.some(([r])=>r.type==='TRANSLATE_VIDEO_SUBTITLES')).toBe(false);
+});
+it('left-click opens the compact menu and only the once action starts translation',async()=>{
+  button().click();await flush();
+  expect(player.view.panelOpen).toBe(true);expect(player.view.root.querySelector<HTMLElement>('.menu-main')!.hidden).toBe(false);
+  expect(player.view.root.querySelector<HTMLElement>('.settings-content')!.hidden).toBe(true);
+  expect(player.enabled).toBe(false);expect(vi.mocked(sendRuntimeRequest).mock.calls.some(([r])=>r.type==='TRANSLATE_VIDEO_SUBTITLES')).toBe(false);
+  player.view.root.querySelector<HTMLButtonElement>('.session')!.click();await flush();
+  expect(player.enabled).toBe(true);expect(settings.videoTranslation?.accountAutoSites??[]).toEqual([]);
+  player.view.root.querySelector<HTMLButtonElement>('.open-settings')!.click();
+  expect(player.view.root.querySelector<HTMLElement>('.settings-content')!.hidden).toBe(false);
+  player.view.root.querySelector<HTMLButtonElement>('.back')!.click();expect(player.view.root.querySelector<HTMLElement>('.menu-main')!.hidden).toBe(false);
+});
+it('downloads original subtitles without translating and keeps completed bilingual subtitles after stopping',async()=>{
+  const downloaded:string[]=[];
+  vi.stubGlobal('URL',Object.assign(class extends window.URL {},{createObjectURL:vi.fn(()=> 'blob:subtitle-fixture'),revokeObjectURL:vi.fn()}));
+  vi.spyOn(HTMLAnchorElement.prototype,'click').mockImplementation(function(this:HTMLAnchorElement){downloaded.push(this.download);});
+  button().click();player.view.root.querySelector<HTMLButtonElement>('.open-download')!.click();
+  const mode=player.view.root.querySelector<HTMLSelectElement>('.download-mode')!;mode.value='original';
+  player.view.root.querySelector<HTMLButtonElement>('.save-subtitles')!.click();await flush();
+  expect(downloaded[0]).toMatch(/original\.srt$/);expect(vi.mocked(sendRuntimeRequest).mock.calls.some(([r])=>r.type==='TRANSLATE_VIDEO_SUBTITLES')).toBe(false);
+  sessionClick();await flush();sessionClick();await flush();
+  const calls=vi.mocked(sendRuntimeRequest).mock.calls.filter(([r])=>r.type==='TRANSLATE_VIDEO_SUBTITLES').length;
+  mode.value='bilingual';player.view.root.querySelector<HTMLButtonElement>('.save-subtitles')!.click();await flush();
+  expect(downloaded[1]).toMatch(/bilingual\.srt$/);
+  expect(vi.mocked(sendRuntimeRequest).mock.calls.filter(([r])=>r.type==='TRANSLATE_VIDEO_SUBTITLES')).toHaveLength(calls);
+});
+it('applies appearance settings to the shared subtitle box without starting another translation',async()=>{
+  sessionClick();await flush();
+  const calls=vi.mocked(sendRuntimeRequest).mock.calls.filter(([r])=>r.type==='TRANSLATE_VIDEO_SUBTITLES').length;
+  player.view.root.querySelector<HTMLButtonElement>('.open-settings')!.click();
+  for(const [selector,value]of [['.font','38'],['.source-font','32'],['.subtitle-order','translation-first'],['.source-color','#ffee00'],['.background-opacity','50'],['.bottom-offset','20']]){
+    const input=player.view.root.querySelector<HTMLInputElement|HTMLSelectElement>(selector)!;input.value=value;input.dispatchEvent(new Event('change'));await flush();
+  }
+  expect(settings.videoTranslation).toMatchObject({fontSize:38,sourceFontSize:32,subtitleOrder:'translation-first',sourceColor:'#ffee00',backgroundOpacity:50,bottomOffset:20});
+  expect(player.view.host.style.getPropertyValue('--wp-video-bg')).toBe('rgba(0,0,0,0.5)');
+  expect(player.view.host.style.getPropertyValue('--wp-source-order')).toBe('1');
+  expect(vi.mocked(sendRuntimeRequest).mock.calls.filter(([r])=>r.type==='TRANSLATE_VIDEO_SUBTITLES')).toHaveLength(calls);
 });
 it('right-click opens settings above the native AI button without starting translation or YouTube context menus',async()=>{
   const siteMenu=vi.fn();video.parentElement!.addEventListener('contextmenu',siteMenu);
@@ -83,7 +121,7 @@ it('saves subtitle size, original-text display and language from the right-click
   expect(player.view.root.querySelector<HTMLSelectElement>('.font')!.value).toBe('26');
   expect(player.view.root.querySelector<HTMLSelectElement>('.target')!.value).toBe('de');
   expect(player.view.root.querySelector<HTMLInputElement>('.original')!.checked).toBe(false);
-  button().click();await flush();
+  sessionClick();await flush();
   expect(settings.videoTranslation!.showOriginal).toBe(false);
   expect(player.view.root.querySelector('.source span')!.textContent).toBe('');
   expect(player.view.root.querySelector('.translation span')!.textContent).toBe('Deutsche Untertitel');
@@ -99,7 +137,7 @@ it('starts automatic CC only after explicit site opt-in and preserves other site
   expect(vi.mocked(sendRuntimeRequest).mock.calls.filter(([r])=>r.type==='TRANSLATE_VIDEO_SUBTITLES')).toHaveLength(1);
   automatic.checked=false;automatic.dispatchEvent(new Event('change'));await flush();
   expect(settings.videoTranslation!.accountAutoSites).toEqual(['example.org']);
-  button().click();await flush();
+  sessionClick();await flush();
   const font=player.view.root.querySelector<HTMLSelectElement>('.font')!;font.value='26';font.dispatchEvent(new Event('change'));await flush();
   expect(player.enabled).toBe(false);
   expect(vi.mocked(sendRuntimeRequest).mock.calls.filter(([r])=>r.type==='TRANSLATE_VIDEO_SUBTITLES')).toHaveLength(1);
@@ -108,7 +146,7 @@ it.each([false,true])('starts the next YouTube video automatically only for site
   player.dispose();settings.videoTranslation={...settings.videoTranslation!,enabled:true,accountAutoSites:automatic?['youtube']:[]};
   const manager=new VideoSubtitleManager();await flush();
   try{
-    if(!automatic){button().click();await flush();}
+    if(!automatic){sessionClick();await flush();}
     expect(manager.enabled).toBe(true);
     vi.stubGlobal('location',new URL('https://www.youtube.com/watch?v=next-fixture'));
     Object.defineProperty(english,'cues',{configurable:true,value:[{startTime:0,endTime:60,text:'Next video subtitle.'}]});
@@ -132,18 +170,18 @@ it('does not turn legacy automatic rules into AI account consent during upgrade'
 });
 it('enables CC directly and translates English to the saved target, then stops',async()=>{
   const playerClick=vi.fn();video.parentElement!.addEventListener('click',playerClick);
-  button().click();await flush();
+  sessionClick();await flush();
   expect(settings.videoTranslation).toMatchObject({enabled:true,showOriginal:true,enabledSites:[]});
   expect(vi.mocked(sendRuntimeRequest).mock.calls.some(([r])=>r.type==='TRANSLATE_VIDEO_SUBTITLES'&&r.sourceLang==='en'&&r.targetLang==='ja'&&r.providerId==='chatgpt-desktop')).toBe(true);
   expect(player.view.root.querySelector('.source span')!.textContent).toBe('Welcome to this video.');
   expect(player.view.root.querySelector('.translation span')!.textContent).toBe('日本語の字幕');
   expect(button().getAttribute('aria-pressed')).toBe('true');expect(playerClick).not.toHaveBeenCalled();
-  button().click();await flush();expect(player.enabled).toBe(false);expect(button().getAttribute('aria-pressed')).toBe('false');
+  sessionClick();await flush();expect(player.enabled).toBe(false);expect(button().getAttribute('aria-pressed')).toBe('false');
 });
 it('starts subtitles on HTTP pages where crypto.randomUUID is unavailable',async()=>{
   const getRandomValues=crypto.getRandomValues.bind(crypto);
   vi.stubGlobal('crypto',{getRandomValues});
-  button().click();await flush();
+  sessionClick();await flush();
   expect(vi.mocked(sendRuntimeRequest).mock.calls.some(([r])=>r.type==='TRANSLATE_VIDEO_SUBTITLES')).toBe(true);
   expect(player.view.root.querySelector('.translation span')!.textContent).toBe('日本語の字幕');
 });
@@ -151,7 +189,7 @@ it('keeps loading visible through a delayed AI response, then clears it on compl
   let finish!:(value:unknown)=>void;
   const original=vi.mocked(sendRuntimeRequest).getMockImplementation()!;
   vi.mocked(sendRuntimeRequest).mockImplementation(request=>request.type==='TRANSLATE_VIDEO_SUBTITLES'?new Promise(resolve=>{finish=resolve;}):original(request));
-  button().click();
+  sessionClick();
   expect(button().getAttribute('aria-busy')).toBe('true');
   await flush();
   expect(player.subtitlePhase).toBe('loading');
@@ -160,12 +198,12 @@ it('keeps loading visible through a delayed AI response, then clears it on compl
   finish({translations:['日本語の字幕'],cached:0});await flush();
   expect(button().getAttribute('aria-busy')).toBe('false');
   expect(player.view.root.querySelector('.toggle')!.getAttribute('aria-busy')).toBe('false');
-  button().click();await flush();
+  sessionClick();await flush();
   expect(player.subtitlePhase).toBe('idle');
   expect(button().getAttribute('aria-busy')).toBe('false');
 });
 it('follows another CC language and a changed target language',async()=>{
-  button().click();await flush();
+  sessionClick();await flush();
   english.mode='hidden';french.mode='showing';await vi.advanceTimersByTimeAsync(240);await flush();
   expect(vi.mocked(sendRuntimeRequest).mock.calls.some(([r])=>r.type==='TRANSLATE_VIDEO_SUBTITLES'&&r.sourceLang==='fr'&&r.targetLang==='ja')).toBe(true);
   settings={...settings,targetLang:'de'};changed.forEach(fn=>fn({[SETTINGS_KEY]:{newValue:settings}},'local'));await flush();
@@ -175,12 +213,12 @@ it('follows another CC language and a changed target language',async()=>{
 it('uses the selected desktop account and its model for CC instead of forcing Codex',async()=>{
   settings={...settings,activeProviderId:'claude-desktop',providers:[...settings.providers,{id:'claude-desktop',type:'chatgpt-desktop',engine:'claude',model:'haiku',label:'Claude'}]};
   changed.forEach(fn=>fn({[SETTINGS_KEY]:{newValue:settings}},'local'));await flush();
-  button().click();await flush();
+  sessionClick();await flush();
   expect(vi.mocked(sendRuntimeRequest).mock.calls.some(([r])=>r.type==='TRANSLATE_VIDEO_SUBTITLES'&&r.providerId==='claude-desktop')).toBe(true);
   expect(player.view.root.querySelector<HTMLSelectElement>('.provider')!.disabled).toBe(false);
 });
 it('captures the selected CC before restoring tracks during a restart',async()=>{
-  button().click();await flush();
+  sessionClick();await flush();
   english.mode='hidden';french.mode='showing';
   await player.start();await flush();
   expect(player.view.root.querySelector('.source span')!.textContent).toBe('Bienvenue dans cette vidéo.');
@@ -198,12 +236,12 @@ it('removes a cloned AI button when YouTube clones the whole control bar', async
   controls.replaceWith(controls.cloneNode(true)); await flush();
   expect(document.querySelectorAll('.wupage-ai-cc-button')).toHaveLength(1);
   expect(button().nextElementSibling?.className).toBe('ytp-settings-button');
-  button().click(); await flush();
+  sessionClick(); await flush();
   expect(vi.mocked(sendRuntimeRequest).mock.calls.filter(([r])=>r.type==='TRANSLATE_VIDEO_SUBTITLES')).toHaveLength(1);
 });
 it('supersedes an earlier control without observers fighting over the same player', async()=>{
   const toggle=vi.fn(), container=video.parentElement!;
-  const replacement=new YouTubeAiControl(container,toggle,()=>{},()=>{}); await flush();
+  const replacement=new YouTubeAiControl(container,()=>{},toggle); await flush();
   expect(document.querySelectorAll('.wupage-ai-cc-button')).toHaveLength(1);
   expect(document.querySelectorAll('style[data-wupage-video-style="youtube-control"]')).toHaveLength(1);
   for(let i=0;i<4;i++){document.querySelector('.ytp-right-controls')!.append(document.createElement('span'));await flush();}
@@ -221,7 +259,7 @@ it('does not fight a legacy observer left in a tab after an extension update', a
     if(++repairs>=40){previous.disconnect();return;}
     controls.insertBefore(legacy,gear);
   });previous.observe(container,{childList:true,subtree:true});
-  const replacement=new YouTubeAiControl(container,()=>{},()=>{},()=>{});
+  const replacement=new YouTubeAiControl(container,()=>{},()=>{});
   try {await flush();expect(repairs).toBeLessThan(3);expect(replacement.button.isConnected).toBe(true);}
   finally {previous.disconnect();replacement.dispose();legacy.remove();}
 });
@@ -251,8 +289,8 @@ it('inserts beside CC and Settings in the new nested YouTube controls',async()=>
 it('can cancel while enabling the feature without starting a late translation',async()=>{
   let save!:()=>void;const original=vi.mocked(sendRuntimeRequest).getMockImplementation()!;
   vi.mocked(sendRuntimeRequest).mockImplementation(request=>request.type==='SAVE_SETTINGS'?new Promise(resolve=>{save=()=>{settings=request.settings;resolve(null);};}):original(request));
-  button().click();await flush();expect(button().getAttribute('aria-pressed')).toBe('true');
-  button().click();save();await flush();
+  sessionClick();await flush();expect(button().getAttribute('aria-pressed')).toBe('true');
+  sessionClick();save();await flush();
   expect(player.enabled).toBe(false);expect(button().getAttribute('aria-pressed')).toBe('false');
   expect(vi.mocked(sendRuntimeRequest).mock.calls.some(([r])=>r.type==='TRANSLATE_VIDEO_SUBTITLES')).toBe(false);
 });

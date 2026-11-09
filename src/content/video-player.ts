@@ -14,6 +14,7 @@ import { LiveSubtitleTranslator } from "../video/live-subtitles";
 import { CHATGPT_BUILD } from "../shared/chatgpt-build";
 import { YouTubeAiControl } from "./youtube-ai-control";
 import { accountVideoProviderId } from "../shared/desktop-account";
+import { SubtitleArchive, serializeSubtitles, type SubtitleExportMode, type SubtitleExportFormat } from "../video/subtitle-export";
 
 export class PlayerSubtitleController {
   readonly view: VideoView;
@@ -63,6 +64,9 @@ export class PlayerSubtitleController {
   private youtubeControl?: YouTubeAiControl;
   private controlStartPending = false;
   private controlActionVersion = 0;
+  private readonly archive = new SubtitleArchive();
+  private originalCues?: () => SubtitleCue[];
+  private downloadController?: AbortController;
 
   private get slowAi(): boolean {
     return this.settings?.providers.find(provider => provider.id === this.settings?.activeProviderId)?.type === "chatgpt-desktop";
@@ -70,16 +74,17 @@ export class PlayerSubtitleController {
 
   constructor(readonly video: HTMLVideoElement, readonly container: HTMLElement, readonly platform?: VideoPlatform, private autoStart = true) {
     this.view = new VideoView({
-      toggle: () => { if (this.enabled) this.stop(); else void this.start(); },
+      toggle: () => { if (CHATGPT_BUILD) void this.toggleYouTubeControl(); else if (this.enabled) this.stop(); else void this.start(); },
       retry: () => { void this.start(); },
-      source: id => { this.source = id; if (this.enabled) void this.start(); },
+      source: id => { this.archive.clear(); this.originalCues = undefined; this.cancelDownload(); this.source = id; if (this.enabled) void this.start(); },
       settings: patch => this.save(patch),
       preferences: patch => {
         this.save({}, patch);
       },
       import: file => { void this.importFile(file); },
       offset: value => { this.offset = value; this.live?.reset(); this.tick(); },
-      panel: open => this.youtubeControl?.setSettingsOpen(open)
+      panel: open => this.youtubeControl?.setSettingsOpen(open),
+      download: (mode, format) => { void this.downloadSubtitles(mode, format); }
     }, this.site);
     if (getComputedStyle(container).position === "static") {
       this.originalPosition = { value: container.style.getPropertyValue("position"), priority: container.style.getPropertyPriority("position") };
@@ -90,8 +95,7 @@ export class PlayerSubtitleController {
       video[data-wupage-video-cues="${this.view.id}"]::cue { color: transparent; background-color: transparent; text-shadow: none; }`;
     container.append(this.nativeStyle, this.view.host);
     if (CHATGPT_BUILD && platform?.id === "youtube") {
-      this.youtubeControl = new YouTubeAiControl(container, () => { void this.toggleYouTubeControl(); },
-        attached => this.view.host.toggleAttribute("data-native-controls", attached),
+      this.youtubeControl = new YouTubeAiControl(container, attached => this.view.host.toggleAttribute("data-native-controls", attached),
         () => { this.showControls(); this.populateTracks(); this.view.setPanel(true, this.youtubeControl?.button); });
     }
     this.on(container, "pointermove", () => this.showControls());
@@ -253,6 +257,7 @@ export class PlayerSubtitleController {
   }
 
   private useTimeline(cues: () => SubtitleCue[], language: string): void {
+    this.originalCues = cues; this.prepareArchive(language);
     this.nativeTrack = undefined;
     this.view.host.dataset.subtitleSource = "timeline";
     this.timeline?.dispose(); this.live?.dispose(); this.requests?.cancel();
@@ -261,10 +266,11 @@ export class PlayerSubtitleController {
     const requests = this.requests;
     this.timeline = new SubtitleTranslator(() => {
       const value = cues(); this.timelineHasCues = value.length > 0; return value;
-    }, (texts, signal) => requests.translate(texts, signal), () => this.paint(), this.slowAi ? 90 : 15);
+    }, (texts, signal) => requests.translate(texts, signal), () => this.paint(), this.slowAi ? 90 : 15, completed => this.archive.add(completed));
   }
 
   private useRendered(): void {
+    this.originalCues = undefined; this.prepareArchive(this.settings!.sourceLang);
     this.nativeTrack = undefined;
     this.view.host.dataset.subtitleSource = "live";
     this.sourceLanguage = this.settings!.sourceLang;
@@ -374,6 +380,7 @@ export class PlayerSubtitleController {
       }
     } else this.resumeBufferedPlayback();
     this.view.render(value.source, value.translation, this.preferences);
+    if (!this.timeline) this.archive.live(value.source, value.translation, this.video.currentTime);
     this.hideNative(!!value.translation);
     this.renderNativeFullscreen(value.source, value.translation);
     if (error) { this.phase = "error"; this.state(`翻译暂不可用：${error}`); }
@@ -446,6 +453,7 @@ export class PlayerSubtitleController {
   }
 
   private changedVideo(): void {
+    if (mediaKey() !== this.key) { this.archive.clear(); this.originalCues = undefined; this.cancelDownload(); }
     if (!this.enabled) return;
     if (CHATGPT_BUILD && mediaKey() !== this.key) { this.stop(); return; }
     this.imported = undefined; this.source = "auto"; this.suppressUntil = Date.now() + 500;
@@ -471,6 +479,10 @@ export class PlayerSubtitleController {
       return JSON.stringify([value.sourceLang, value.targetLang, providerId,
         value.providers.find(provider => provider.id === providerId), normalizeVideoTranslation(value.videoTranslation).preferredSource]);
     };
+    if (previous && signature(previous) !== signature(settings)) {
+      this.archive.clear(); this.cancelDownload();
+      if (previous.sourceLang !== settings.sourceLang || previousVideo.preferredSource !== this.preferences.preferredSource) this.originalCues = undefined;
+    }
     if (this.enabled && previous && signature(previous) !== signature(settings)) {
       const sourceChanged = previous.sourceLang !== settings.sourceLang
         || normalizeVideoTranslation(previous.videoTranslation).preferredSource !== normalizeVideoTranslation(settings.videoTranslation).preferredSource;
@@ -513,6 +525,51 @@ export class PlayerSubtitleController {
     } catch (error) { this.view.tell(error instanceof Error ? error.message : String(error)); }
   }
 
+  private prepareArchive(language: string): void {
+    const provider = this.settings?.providers.find(entry => entry.id === this.settings?.activeProviderId);
+    this.archive.setContext(JSON.stringify([mediaKey(), this.source, language, this.settings?.targetLang, this.settings?.activeProviderId,
+      provider && "model" in provider ? provider.model : undefined, provider && "engine" in provider ? provider.engine : undefined]));
+  }
+
+  private async downloadSubtitles(mode: SubtitleExportMode, format: SubtitleExportFormat): Promise<void> {
+    if (!["original", "translation", "bilingual"].includes(mode) || !["srt", "vtt"].includes(format)) return;
+    if (this.downloadController || this.disposed) return;
+    const controller = new AbortController(), key = mediaKey(); this.downloadController = controller;
+    this.view.downloadState(true, "正在準備字幕檔案…");
+    try {
+      let cues = mode === "original" ? this.originalCues?.() ?? [] : this.archive.cues(mode, this.preferences.subtitleOrder === "translation-first");
+      if (mode === "original" && !cues.length) {
+        const native = this.source.startsWith("native:") ? this.nativeTracks()[Number(this.source.slice(7))] : this.chooseNative(this.nativeTracks());
+        cues = native?.cues ? Array.from(native.cues).map(cue => ({ start: cue.startTime, end: cue.endTime, text: subtitleText((cue as VTTCue).text) })) : [];
+        if (!cues.length && this.platform?.bridge) {
+          const catalogue = await pageSubtitleCatalogue(controller.signal);
+          if (catalogue?.key === key) {
+            const selected = this.source.startsWith("page:") ? this.source.slice(5) : catalogue.selected ?? catalogue.tracks[0]?.id;
+            if (selected) { const result = await loadPageSubtitles(selected, controller.signal); if (result.key === key) cues = result.cues; }
+          }
+        }
+        if (!cues.length) cues = this.archive.cues("original");
+      }
+      if (controller.signal.aborted || this.disposed || mediaKey() !== key) return;
+      const content = serializeSubtitles(cues.map(cue => ({ ...cue, start: Math.max(0, cue.start + this.offset), end: Math.max(0, cue.end + this.offset) })), format);
+      const url = URL.createObjectURL(new Blob(["\uFEFF", content], { type: format === "vtt" ? "text/vtt;charset=utf-8" : "application/x-subrip;charset=utf-8" }));
+      const anchor = document.createElement("a"); anchor.href = url;
+      const language = (mode === "original" ? this.sourceLanguage : this.settings?.targetLang ?? "auto").replace(/[^\w-]/gu, "").slice(0, 32);
+      anchor.download = `wupage-${this.platform?.id ?? "video"}-${language}-${mode}.${format}`;
+      anchor.hidden = true; document.documentElement.append(anchor); anchor.click(); anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 30_000);
+      this.view.downloadState(false, `已下載 ${cues.length} 段字幕。${mode === "original" ? "" : "譯文僅包含目前已完成的部分，沒有額外啟動翻譯。"}`);
+    } catch (error) {
+      if (!this.disposed && !controller.signal.aborted) this.view.downloadState(false, error instanceof Error ? error.message : String(error));
+    } finally { if (this.downloadController === controller) this.downloadController = undefined; }
+  }
+
+  private cancelDownload(): void {
+    if (!this.downloadController) return;
+    this.downloadController.abort(); this.downloadController = undefined;
+    this.view.downloadState(false, "字幕設定已變更，請重新下載。");
+  }
+
   position(): void {
     if (this.disposed) return;
     this.view.host.toggleAttribute("data-shorts", this.platform?.id === "youtube" &&
@@ -538,7 +595,7 @@ export class PlayerSubtitleController {
   stop(): void {
     ++this.controlActionVersion; this.controlStartPending = false;
     this.resumeOnReplacement = false; this.enabled = false; this.epoch++; this.clearSession(); this.phase = "idle";
-    this.state("点击播放器上的「字幕翻译」即可开启。"); this.showControls();
+    this.state("字幕翻譯已停止。"); this.showControls();
   }
 
   private clearSession(restoreNative = true): void {
@@ -569,6 +626,7 @@ export class PlayerSubtitleController {
       if (this.originalPosition.value) this.container.style.setProperty("position", this.originalPosition.value, this.originalPosition.priority);
       else this.container.style.removeProperty("position");
     }
+    this.downloadController?.abort(); this.archive.clear(); this.originalCues = undefined;
     this.imported = undefined; this.catalogue = undefined; this.view.dispose(); this.nativeStyle.remove();
     this.youtubeControl?.dispose();
   }
