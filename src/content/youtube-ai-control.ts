@@ -9,10 +9,11 @@ export class YouTubeAiControl {
   private controls?: HTMLElement;
   private settingsButton?: Element;
   private nativeAttached?: boolean;
+  private shorts = false;
   // A DOM event also reaches an older copy of the module after reinjection.
   private readonly superseded = () => this.dispose();
 
-  constructor(private player: HTMLElement, private attached: (value: boolean) => void, openSettings: () => void) {
+  constructor(private player: HTMLElement, private attached: (value: boolean) => void, openSettings: (toggle?: boolean) => void) {
     player.dispatchEvent(new Event("wupage-ai-cc-takeover"));
     player.addEventListener("wupage-ai-cc-takeover", this.superseded);
     player.querySelectorAll('.wupage-ai-cc-button,style[data-wupage-video-style="youtube-control"]').forEach(node => node.remove());
@@ -23,7 +24,7 @@ export class YouTubeAiControl {
     this.button.setAttribute("aria-haspopup", "dialog");
     this.button.setAttribute("aria-expanded", "false");
     this.button.innerHTML = `${uiIconMarkup("microchip")}<span aria-hidden="true">AI</span>`;
-    this.button.addEventListener("click", event => { event.preventDefault(); event.stopPropagation(); openSettings(); });
+    this.button.addEventListener("click", event => { event.preventDefault(); event.stopPropagation(); openSettings(true); });
     this.button.addEventListener("contextmenu", event => {
       event.preventDefault(); event.stopPropagation(); openSettings();
     });
@@ -58,7 +59,7 @@ export class YouTubeAiControl {
     `;
     player.append(this.style);
     this.observer = new MutationObserver(records => {
-      if (this.disposed) return;
+      if (this.disposed || this.shorts) return;
       if (!this.controls?.isConnected || this.button.parentElement !== (this.settingsButton?.parentElement ?? this.controls)
         || this.style.parentElement !== this.player || records.some(record => this.controls!.contains(record.target)
           && [...record.addedNodes, ...record.removedNodes].some(node => node instanceof Element
@@ -71,6 +72,7 @@ export class YouTubeAiControl {
 
   private mount(): void {
     if (this.disposed) return;
+    if (this.shorts) { this.button.remove(); this.controls = undefined; this.settingsButton = undefined; this.setAttached(false); return; }
     const controls = this.player.querySelector<HTMLElement>(".ytp-right-controls");
     if (!controls) { this.setAttached(false); return; }
     const replaced = controls !== this.controls;
@@ -99,6 +101,11 @@ export class YouTubeAiControl {
   private setAttached(value: boolean): void {
     if (this.nativeAttached === value) return;
     this.nativeAttached = value; this.attached(value);
+  }
+
+  setShorts(value: boolean): void {
+    if (this.shorts === value) return;
+    this.shorts = value; this.mount();
   }
 
   update(enabled: boolean, loading: boolean, target: string): void {

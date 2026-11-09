@@ -86,6 +86,38 @@ const styles = `
   .reset-style,.save-subtitles { border:1px solid #555; border-radius:7px; padding:8px 12px; background:#272727; color:#eee; font:12px system-ui,sans-serif; }
   .save-subtitles { width:100%; margin:8px 0; background:#d2c0ff; color:#21182e; border-color:transparent; }.export-status { color:#c4b1ef; overflow-wrap:anywhere; font-size:12px; }
   @media(prefers-reduced-motion:reduce) { .session svg {animation:none!important}.automatic::after {transition:none} }
+  :host([data-menu-control]) .toolbar { gap:0; border-radius:20px; background:#171717db; border-color:#ffffff30; backdrop-filter:blur(12px); }
+  :host([data-menu-control]) .toolbar .settings { display:none; }
+  :host([data-menu-control]) .toolbar .toggle { min-height:38px; padding:7px 12px; border-radius:20px; gap:7px; font-size:12px; }
+  :host([data-menu-control]) .mark { border:0; width:18px; height:18px; background:none; color:inherit; }
+  :host([data-menu-control]) .mark svg { width:18px; height:18px; }
+  :host([data-menu-control][data-enabled]) .toolbar { color:#decfff; border-color:#c4adff77; }
+  :host([data-menu-control]) .toggle[aria-busy="true"] .mark svg { visibility:hidden; }
+  :host([data-menu-control]) .toggle[aria-busy="true"] .mark { border:2px solid #d3bfff; border-right-color:transparent; }
+  :host([data-shorts]) .captions { bottom:max(var(--wp-video-bottom,8%),112px); max-width:calc(100% - 32px); padding:9px 13px; border-radius:10px; }
+  .panel { width:min(304px,calc(100vw - 24px)); padding:16px; border-radius:16px; background:#171717fa; border-color:#ffffff20; font-size:13px; box-shadow:0 12px 40px #0007; scrollbar-width:thin; scrollbar-color:#626262 transparent; }
+  .panel[data-page="settings"],.panel[data-page="download"] { width:min(352px,calc(100vw - 24px)); }
+  .panel header { top:-16px; padding-top:3px; margin-bottom:4px; background:#171717; }
+  .panel h2 { font-size:14px; font-weight:600; }
+  .close { width:28px; height:28px; display:grid; place-items:center; padding:5px; border-radius:50%; }
+  .close svg { width:16px; height:16px; } .close:hover,.back:hover { background:#ffffff15; }
+  .service-summary { margin:0 0 12px; color:#aaa; font:11px/1.5 system-ui,sans-serif; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .quick-controls { display:grid; grid-template-columns:minmax(0,1.7fr) minmax(0,1fr); gap:10px; padding:10px; margin:0 0 10px; background:#ffffff08; border:1px solid #ffffff0d; border-radius:10px; }
+  .quick-controls .field { margin:0; font-size:11px; color:#aaa; gap:5px; } .quick-controls select { background:#242424; border-color:#424242; height:34px; font-size:12px; }
+  .menu-row { min-height:44px; padding:10px 9px; font-size:13px; border-radius:8px; }
+  .menu-row:hover { background:#ffffff12; } .session { background:#c8b3ff18; color:#e0d1ff; margin-bottom:5px; }
+  .session:hover { background:#c8b3ff28; } .menu-divider { height:1px; margin:8px 0; background:#ffffff12; }
+  .scope-hint { margin:0 9px 5px 36px; line-height:1.5; font-size:10px; color:#929292; }
+  .settings-content { border-top:0; padding-top:8px; } .settings-content .field { margin:10px 0; }
+  .settings-content .row { gap:10px; margin-bottom:10px; } .settings-content select { height:36px; }
+  .style-preview { margin-bottom:14px; min-height:66px; justify-content:center; border:1px solid #ffffff12; }
+  .advanced-settings { margin:14px 0 8px; padding-top:12px; } .advanced-settings summary { color:#ddd; font-size:12px; }
+  .reset-style { display:block; margin:14px auto 0; padding:5px 8px; border:0; background:transparent; color:#bfb1df; }
+  .status { padding:0; margin:10px 0 0; color:#aaa; font-size:11px; line-height:1.6; }
+  .status:empty { display:none; } :host([data-error]) .status { color:#ffc9b6; }
+  .session[aria-busy="true"] svg { animation:none; display:none; } .busy-spinner { display:none; width:17px; height:17px; border:2px solid #dacaff; border-right-color:transparent; border-radius:50%; flex-shrink:0; }
+  .session[aria-busy="true"] .busy-spinner { display:block; animation:wupage-cc-spin 780ms linear infinite; }
+  @media(prefers-reduced-motion:reduce) { .busy-spinner { animation:none!important; } }
 `;
 
 export class VideoView {
@@ -107,18 +139,22 @@ export class VideoView {
 
   constructor(private actions: VideoViewActions, label: string) {
     this.host.id = this.id; this.host.dataset.wupageVideo = ""; this.host.setAttribute("translate", "no");
+    this.host.toggleAttribute("data-menu-control", CHATGPT_BUILD);
     this.root.innerHTML = `<style>${styles}</style>
       <div class="toolbar" role="group" aria-label="视频字幕翻译">
-        <button class="toggle" type="button" aria-pressed="false" title="翻译视频字幕"><span class="mark" aria-hidden="true">译</span><span class="label">字幕翻译</span></button>
+        <button class="toggle" type="button" aria-pressed="false" title="翻译视频字幕"><span class="mark" aria-hidden="true">${uiIconMarkup("microchip")}</span><span class="label">AI 字幕</span></button>
         <button class="settings" type="button" aria-label="字幕设置" title="字幕设置" aria-expanded="false">${uiIconMarkup("settings")}</button>
       </div>
       <div class="captions" role="region" aria-label="双语字幕" hidden><div class="source" dir="auto"><span></span></div><div class="translation" dir="auto"><span></span></div></div>
       <section class="panel" popover="manual" role="dialog" aria-label="CC 字幕設定" hidden>
-        <header><button class="back" type="button" aria-label="返回字幕選單" hidden>${uiIconMarkup("arrow-right")}</button><h2>${uiIconMarkup("microchip")}<span class="panel-title">AI 字幕</span></h2><button class="close" type="button" aria-label="关闭字幕设置">×</button></header>
+        <header><button class="back" type="button" aria-label="返回字幕選單" hidden>${uiIconMarkup("arrow-right")}</button><h2>${uiIconMarkup("microchip")}<span class="panel-title">AI 字幕</span></h2><button class="close" type="button" aria-label="关闭字幕设置">${uiIconMarkup("cross")}</button></header>
         <div class="menu-main">
-          <label class="menu-row">${uiIconMarkup("microchip")}<span class="row-label">開啟字幕翻譯</span><input class="automatic" type="checkbox" aria-label="記住此網站並自動翻譯字幕"></label>
+          <p class="service-summary"></p>
+          <div class="quick-controls"><label class="field">翻譯語言<select class="quick-target" aria-label="快速設定字幕翻譯語言"></select></label><label class="field">字幕大小<select class="quick-font" aria-label="快速設定字幕大小"></select></label></div>
+          <button class="menu-row session" type="button" aria-pressed="false">${uiIconMarkup("lightning")}<span class="busy-spinner" aria-hidden="true"></span><span class="row-label session-label">僅本次開啟字幕翻譯</span></button>
+          <label class="menu-row">${uiIconMarkup("microchip")}<span class="row-label">此網站自動翻譯</span><input class="automatic" type="checkbox" aria-label="記住此網站並自動翻譯字幕"></label>
           <p class="scope-hint">記住此網站，下次開啟影片也會翻譯。</p>
-          <button class="menu-row session" type="button" aria-pressed="false">${uiIconMarkup("lightning")}<span class="row-label session-label">僅本次開啟字幕翻譯</span></button>
+          <div class="menu-divider" role="separator"></div>
           <button class="menu-row open-download" type="button">${uiIconMarkup("document")}<span class="row-label">下載字幕</span>${uiIconMarkup("arrow-right")}</button>
           <button class="menu-row open-settings" type="button">${uiIconMarkup("settings")}<span class="row-label">字幕設定</span>${uiIconMarkup("arrow-right")}</button>
         </div>
@@ -126,20 +162,20 @@ export class VideoView {
         <div class="style-preview" aria-label="字幕樣式預覽"><div class="preview-source">Original subtitles appear here.</div><div class="preview-translation">雙語字幕樣式預覽</div></div>
         <div class="row"><label class="field">译为<select class="target" aria-label="字幕目标语言"></select></label><label class="field">譯文字體大小<select class="font" aria-label="譯文字體大小"></select></label></div>
         <div class="row"><label class="field">原文字體大小<select class="source-font" aria-label="原文字體大小"><option value="0">與譯文相同</option></select></label><label class="field">字幕排列<select class="subtitle-order"><option value="original-first">原文在上</option><option value="translation-first">譯文在上</option></select></label></div>
-        <div class="row"><label class="field">字體<select class="font-family"><option value="system">系統黑體</option><option value="serif">襯線字體</option><option value="monospace">等寬字體</option></select></label><label class="field">字重<select class="font-weight"><option value="normal">一般</option><option value="bold">粗體</option></select></label></div>
-        <div class="row"><label class="field">原文字色<input class="source-color" type="color" value="#ffffff"></label><label class="field">譯文字色<input class="translation-color" type="color" value="#ffffff"></label></div>
-        <label class="field">翻译服务<select class="provider" aria-label="字幕翻译服务"></select></label>
-        <label class="field">原字幕<select class="track" aria-label="原字幕语言"><option value="auto">跟随播放器</option></select></label>
         <label class="check"><input class="original" type="checkbox" checked>显示原文</label>
         <label class="field">字幕背景<select class="background" aria-label="字幕背景"><option value="soft">圓角黑色底板</option><option value="solid">不透明黑底</option><option value="none">透明</option></select></label>
         <label class="field">背景不透明度 <output class="opacity-value">88%</output><input class="background-opacity" type="range" min="0" max="100" value="88"></label>
         <label class="field">字幕距底部 <output class="bottom-value">8%</output><input class="bottom-offset" type="range" min="0" max="40" value="8"></label>
-        <button class="reset-style" type="button">還原字幕外觀</button>
-        <details><summary>更多选项</summary>
+        <details class="advanced-settings"><summary>字幕來源與進階樣式</summary>
+          <label class="field">翻译服务<select class="provider" aria-label="字幕翻译服务"></select></label>
+          <label class="field">原字幕<select class="track" aria-label="原字幕语言"><option value="auto">跟随播放器</option></select></label>
+          <div class="row"><label class="field">字體<select class="font-family"><option value="system">系統黑體</option><option value="serif">襯線字體</option><option value="monospace">等寬字體</option></select></label><label class="field">字重<select class="font-weight"><option value="normal">一般</option><option value="bold">粗體</option></select></label></div>
+          <div class="row"><label class="field">原文字色<input class="source-color" type="color" value="#ffffff"></label><label class="field">譯文字色<input class="translation-color" type="color" value="#ffffff"></label></div>
           <label class="field">时间偏移（秒）<input class="offset" type="number" min="-30" max="30" step="0.5" value="0" aria-label="字幕时间偏移"></label>
           <button class="import" type="button">导入 SRT / VTT</button><input class="file" type="file" accept=".srt,.vtt" hidden>
           <p class="help">仅翻译字幕文本，不采集音频。在线翻译使用所选服务的额度。</p>
         </details>
+        <button class="reset-style" type="button">還原字幕外觀</button>
         </div>
         <div class="download-content" hidden>
           <label class="field">字幕內容<select class="download-mode"><option value="bilingual">雙語（已完成部分）</option><option value="translation">譯文（已完成部分）</option><option value="original">原文字幕</option></select></label>
@@ -153,10 +189,15 @@ export class VideoView {
     this.panel = query(".panel"); this.toggle = query(".toggle"); this.label = query(".label"); this.caption = query(".captions");
     this.source = query(".source span"); this.translation = query(".translation span"); this.status = query(".status"); this.notice = query(".notice"); this.retry = query(".retry");
     const target = query<HTMLSelectElement>(".target");
-    for (const size of SUBTITLE_FONT_SIZES) { query<HTMLSelectElement>(".font").add(new Option(`${size} px`, String(size))); query<HTMLSelectElement>(".source-font").add(new Option(`${size} px`, String(size))); }
+    for (const size of SUBTITLE_FONT_SIZES) { query<HTMLSelectElement>(".font").add(new Option(`${size} px`, String(size))); query<HTMLSelectElement>(".quick-font").add(new Option(`${size} px`, String(size))); query<HTMLSelectElement>(".source-font").add(new Option(`${size} px`, String(size))); }
     target.replaceChildren(...TARGET_LANGUAGES.map(language => new Option(language.label, language.code)));
-    this.on(this.toggle, "click", () => actions.toggle());
-    this.on(query(".session"), "click", () => actions.toggle());
+    query<HTMLSelectElement>(".quick-target").replaceChildren(...TARGET_LANGUAGES.map(language => new Option(language.label, language.code)));
+    const openMenu = (toggle = false) => this.setPanel(toggle ? !this.panelOpen : true, this.toggle);
+    this.on(this.toggle, "click", () => { if (CHATGPT_BUILD) openMenu(true); else actions.toggle(); });
+    this.on(this.toggle, "contextmenu", event => { event.preventDefault(); event.stopPropagation(); openMenu(); });
+    this.on(this.toggle, "keydown", event => { const key = event as KeyboardEvent; if (key.key === "ContextMenu" || key.key === "F10" && key.shiftKey) { event.preventDefault(); event.stopPropagation(); openMenu(); } });
+    if (CHATGPT_BUILD) { this.toggle.setAttribute("aria-haspopup", "dialog"); this.toggle.setAttribute("aria-expanded", "false"); }
+    this.on(query(".session"), "click", () => { actions.toggle(); this.dismissPanel(); });
     this.on(query(".open-settings"), "click", () => this.showPage("settings"));
     this.on(query(".open-download"), "click", () => this.showPage("download"));
     this.on(query(".back"), "click", () => this.showPage("menu"));
@@ -165,10 +206,12 @@ export class VideoView {
     this.on(query(".close"), "click", () => this.dismissPanel());
     this.on(this.retry, "click", () => actions.retry());
     this.on(target, "change", () => actions.settings({ targetLang: target.value }));
+    const quickTarget = query<HTMLSelectElement>(".quick-target"); this.on(quickTarget, "change", () => actions.settings({ targetLang: quickTarget.value }));
     const provider = query<HTMLSelectElement>(".provider");
     this.on(provider, "change", () => actions.settings({ activeProviderId: provider.value }));
     const track = query<HTMLSelectElement>(".track"); this.on(track, "change", () => actions.source(track.value));
     const font = query<HTMLSelectElement>(".font"); this.on(font, "change", () => actions.preferences({ fontSize: Number(font.value) as SubtitleFontSize }));
+    const quickFont = query<HTMLSelectElement>(".quick-font"); this.on(quickFont, "change", () => actions.preferences({ fontSize: Number(quickFont.value) as SubtitleFontSize }));
     const sourceFont = query<HTMLSelectElement>(".source-font"); this.on(sourceFont, "change", () => actions.preferences({ sourceFontSize: Number(sourceFont.value) ? Number(sourceFont.value) as SubtitleFontSize : undefined }));
     for (const [selector, key] of [[".subtitle-order", "subtitleOrder"], [".font-family", "fontFamily"], [".font-weight", "fontWeight"], [".source-color", "sourceColor"], [".translation-color", "translationColor"]] as const) {
       const input = query<HTMLSelectElement | HTMLInputElement>(selector); this.on(input, "change", () => actions.preferences({ [key]: input.value } as Partial<VideoTranslationSettings>));
@@ -193,7 +236,9 @@ export class VideoView {
     });
     this.on(this.root, "keydown", (event: Event) => { event.stopPropagation(); if ((event as KeyboardEvent).key === "Escape") { event.preventDefault(); this.dismissPanel(); } });
     this.on(this.root, "click", event => event.stopPropagation());
-    this.on(document, "pointerdown", event => { if (!this.panel.hidden && !event.composedPath().includes(this.host)) this.setPanel(false); }, true);
+    this.on(document, "pointerdown", event => { const path = event.composedPath(); if (!this.panel.hidden && !path.includes(this.host) && (!this.panelAnchor || !path.includes(this.panelAnchor))) this.setPanel(false); }, true);
+    this.on(window, "scroll", () => { if (this.panelOpen) this.positionPanel(); }, true);
+    this.on(query(".advanced-settings"), "toggle", () => { if (this.panelOpen) this.positionPanel(); });
   }
 
   private on(target: EventTarget, type: string, callback: EventListener, capture = false): void {
@@ -221,11 +266,13 @@ export class VideoView {
     }
     this.host.toggleAttribute("data-panel", open);
     this.root.querySelector(".settings")!.setAttribute("aria-expanded", String(open));
+    if (CHATGPT_BUILD) this.toggle.setAttribute("aria-expanded", String(open));
     this.actions.panel?.(open);
   }
 
   private showPage(page: "menu" | "settings" | "download"): void {
     this.panel.dataset.page = page;
+    this.panel.scrollTop = 0;
     this.root.querySelector<HTMLElement>(".menu-main")!.hidden = page !== "menu";
     this.root.querySelector<HTMLElement>(".settings-content")!.hidden = page !== "settings";
     this.root.querySelector<HTMLElement>(".download-content")!.hidden = page !== "download";
@@ -251,11 +298,20 @@ export class VideoView {
   positionPanel(): void {
     const anchor = this.panelAnchor?.isConnected ? this.panelAnchor : this.toggle;
     const button = anchor.getBoundingClientRect();
-    const width = Math.min(this.panel.dataset.page === "menu" ? 292 : 336, innerWidth - 24);
+    const width = Math.min(this.panel.dataset.page === "menu" ? 304 : 352, innerWidth - 24);
     this.host.style.setProperty("--wp-open-panel-width", `${width}px`);
-    const height = Math.min(this.panel.scrollHeight || 430, innerHeight - 24);
-    const top = anchor !== this.toggle ? button.top - height - 8 : button.bottom + 8;
-    this.panel.style.setProperty("--wp-panel-left", `${Math.max(12, Math.min(innerWidth - width - 12, button.right - width))}px`);
+    const player = this.host.getBoundingClientRect(), shorts = this.host.hasAttribute("data-shorts");
+    const maxHeight = Math.max(120, Math.min(innerHeight - 24, shorts && player.height > 144 ? player.height - 24 : innerHeight - 24));
+    this.panel.style.maxHeight = `${maxHeight}px`;
+    const height = Math.min(this.panel.scrollHeight || 430, maxHeight);
+    let top = anchor !== this.toggle ? button.top - height - 8 : button.bottom + 8;
+    let left = button.right - width;
+    if (shorts && !document.fullscreenElement) {
+      // Keep a portrait video readable when the page has room beside it.
+      if (innerWidth - player.right >= width + 24) { left = player.right + 12; top = button.top; }
+      else if (player.left >= width + 24) { left = player.left - width - 12; top = button.top; }
+    }
+    this.panel.style.setProperty("--wp-panel-left", `${Math.max(12, Math.min(innerWidth - width - 12, left))}px`);
     this.panel.style.setProperty("--wp-panel-top", `${Math.max(12, Math.min(innerHeight - height - 12, top))}px`);
   }
 
@@ -268,8 +324,8 @@ export class VideoView {
     if (session.getAttribute("aria-pressed") !== String(enabled)) session.setAttribute("aria-pressed", String(enabled));
     if (session.getAttribute("aria-busy") !== String(enabled && phase === "loading")) session.setAttribute("aria-busy", String(enabled && phase === "loading"));
     this.setText(this.root.querySelector(".session-label")!, enabled ? "停止本次字幕翻譯" : "僅本次開啟字幕翻譯");
-    this.toggle.title = enabled ? "停止字幕翻译" : "翻译视频字幕";
-    this.setText(this.label, !enabled ? "字幕翻译" : phase === "loading" ? "读取字幕…" : phase === "error" ? "字幕需重试" : phase === "waiting" ? "等待原字幕" : "双语已开");
+    this.toggle.title = CHATGPT_BUILD ? "AI 字幕；左鍵或右鍵開啟字幕設定" : enabled ? "停止字幕翻译" : "翻译视频字幕";
+    this.setText(this.label, CHATGPT_BUILD ? phase === "loading" ? "載入中" : phase === "error" ? "重試字幕" : "AI 字幕" : !enabled ? "字幕翻译" : phase === "loading" ? "读取字幕…" : phase === "error" ? "字幕需重试" : phase === "waiting" ? "等待原字幕" : "双语已开");
     this.setText(this.status, message); this.retry.hidden = !enabled || !["waiting", "error"].includes(phase);
   }
 
@@ -278,6 +334,9 @@ export class VideoView {
     const target = this.root.querySelector<HTMLSelectElement>(".target")!;
     if (![...target.options].some(option => option.value === settings.targetLang)) target.add(new Option(settings.targetLang, settings.targetLang));
     target.value = settings.targetLang;
+    const quickTarget = this.root.querySelector<HTMLSelectElement>(".quick-target")!;
+    if (![...quickTarget.options].some(option => option.value === settings.targetLang)) quickTarget.add(new Option(settings.targetLang, settings.targetLang));
+    quickTarget.value = settings.targetLang;
     const provider = this.root.querySelector<HTMLSelectElement>(".provider")!;
     const signature = JSON.stringify(settings.providers.filter(entry => entry.enabled !== false).map(entry => [entry.id, entry.label]));
     if (provider.dataset.options !== signature) {
@@ -285,11 +344,14 @@ export class VideoView {
       provider.dataset.options = signature;
     }
     provider.value = settings.activeProviderId;
+    const label = settings.providers.find(entry => entry.id === settings.activeProviderId)?.label ?? "";
+    this.setText(this.root.querySelector(".service-summary")!, label.replace(/（[^）]*）|\([^)]*\)/gu, "").trim());
     if (CHATGPT_BUILD) {
       for (const option of provider.options) option.disabled = settings.providers.find(p => p.id === option.value)?.type !== "chatgpt-desktop";
       provider.title = "AI CC 字幕使用所選本機帳號與該服務設定的模型。";
     }
     this.root.querySelector<HTMLSelectElement>(".font")!.value = String(preferences.fontSize);
+    this.root.querySelector<HTMLSelectElement>(".quick-font")!.value = String(preferences.fontSize);
     this.root.querySelector<HTMLSelectElement>(".background")!.value = preferences.background;
     this.root.querySelector<HTMLInputElement>(".original")!.checked = preferences.showOriginal;
     this.root.querySelector<HTMLInputElement>(".automatic")!.checked = (CHATGPT_BUILD ? preferences.accountAutoSites ?? [] : preferences.enabledSites).includes(site);

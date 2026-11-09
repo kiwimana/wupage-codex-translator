@@ -48,6 +48,37 @@ it('shows one idle button before the gear and starts no translation on discovery
   expect(button().getAttribute('aria-pressed')).toBe('false');
   expect(vi.mocked(sendRuntimeRequest).mock.calls.some(([r])=>r.type==='TRANSLATE_VIDEO_SUBTITLES')).toBe(false);
 });
+it('a second native-button click closes the menu even after a real pointerdown',async()=>{
+  button().click();expect(player.view.panelOpen).toBe(true);
+  button().dispatchEvent(new Event('pointerdown',{bubbles:true,composed:true}));
+  expect(player.view.panelOpen).toBe(true);
+  button().click();expect(player.view.panelOpen).toBe(false);
+  expect(vi.mocked(sendRuntimeRequest).mock.calls.some(([r])=>r.type==='TRANSLATE_VIDEO_SUBTITLES')).toBe(false);
+});
+it('the fallback AI control opens the same menu and supports right-click without translating',async()=>{
+  document.querySelector('.ytp-right-controls')!.remove();await flush();
+  const fallback=player.view.root.querySelector<HTMLButtonElement>('.toggle')!;
+  fallback.click();expect(player.view.panelOpen).toBe(true);expect(player.enabled).toBe(false);
+  fallback.click();expect(player.view.panelOpen).toBe(false);
+  const event=new MouseEvent('contextmenu',{bubbles:true,cancelable:true});fallback.dispatchEvent(event);
+  expect(event.defaultPrevented).toBe(true);expect(player.view.panelOpen).toBe(true);
+  expect(vi.mocked(sendRuntimeRequest).mock.calls.some(([r])=>r.type==='TRANSLATE_VIDEO_SUBTITLES')).toBe(false);
+});
+it('Shorts keeps its own entry even if YouTube leaves a hidden long-video controls bar attached',async()=>{
+  vi.stubGlobal('location',new URL('https://www.youtube.com/shorts/fixture'));player.position();await flush();
+  expect(document.querySelectorAll('.wupage-ai-cc-button')).toHaveLength(0);expect(player.view.host.hasAttribute('data-native-controls')).toBe(false);
+  const fallback=player.view.root.querySelector<HTMLButtonElement>('.toggle')!;fallback.click();expect(player.view.panelOpen).toBe(true);expect(player.enabled).toBe(false);
+  vi.stubGlobal('location',new URL('https://www.youtube.com/watch?v=fixture'));player.position();await flush();
+  expect(document.querySelectorAll('.wupage-ai-cc-button')).toHaveLength(1);expect(player.view.host.hasAttribute('data-native-controls')).toBe(true);
+});
+it('quick menu settings save without translating and stay synchronized with the detailed page',async()=>{
+  button().click();
+  const font=player.view.root.querySelector<HTMLSelectElement>('.quick-font')!;font.value='32';font.dispatchEvent(new Event('change'));await flush();
+  expect(settings.videoTranslation?.fontSize).toBe(32);expect(player.view.root.querySelector<HTMLSelectElement>('.font')!.value).toBe('32');
+  const target=player.view.root.querySelector<HTMLSelectElement>('.quick-target')!;target.value='de';target.dispatchEvent(new Event('change'));await flush();
+  expect(settings.targetLang).toBe('de');expect(player.view.root.querySelector<HTMLSelectElement>('.target')!.value).toBe('de');
+  expect(vi.mocked(sendRuntimeRequest).mock.calls.some(([r])=>r.type==='TRANSLATE_VIDEO_SUBTITLES')).toBe(false);
+});
 it('left-click opens the compact menu and only the once action starts translation',async()=>{
   button().click();await flush();
   expect(player.view.panelOpen).toBe(true);expect(player.view.root.querySelector<HTMLElement>('.menu-main')!.hidden).toBe(false);

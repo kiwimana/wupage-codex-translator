@@ -96,7 +96,7 @@ export class PlayerSubtitleController {
     container.append(this.nativeStyle, this.view.host);
     if (CHATGPT_BUILD && platform?.id === "youtube") {
       this.youtubeControl = new YouTubeAiControl(container, attached => this.view.host.toggleAttribute("data-native-controls", attached),
-        () => { this.showControls(); this.populateTracks(); this.view.setPanel(true, this.youtubeControl?.button); });
+        toggle => { this.showControls(); this.populateTracks(); this.view.setPanel(toggle ? !this.view.panelOpen : true, this.youtubeControl?.button); });
     }
     this.on(container, "pointermove", () => this.showControls());
     this.on(container, "pointerenter", () => this.showControls());
@@ -572,8 +572,10 @@ export class PlayerSubtitleController {
 
   position(): void {
     if (this.disposed) return;
-    this.view.host.toggleAttribute("data-shorts", this.platform?.id === "youtube" &&
-      (location.pathname.startsWith("/shorts/") || !!this.container.closest("ytd-reel-video-renderer,yt-shorts-player")));
+    const shorts = this.platform?.id === "youtube" && (location.pathname.startsWith("/shorts/") || !!this.container.closest("ytd-reel-video-renderer,yt-shorts-player"));
+    if (this.view.host.hasAttribute("data-shorts") !== shorts) this.view.setPanel(false);
+    this.view.host.toggleAttribute("data-shorts", shorts);
+    this.youtubeControl?.setShorts(shorts);
     const fullscreen = document.fullscreenElement;
     const parent = fullscreen instanceof HTMLElement && fullscreen !== this.video && fullscreen.contains(this.video) ? fullscreen : this.container;
     if (this.view.host.parentElement !== parent) parent.append(this.view.host);
@@ -593,9 +595,10 @@ export class PlayerSubtitleController {
   }
 
   stop(): void {
+    const wasActive = this.enabled || this.controlStartPending;
     ++this.controlActionVersion; this.controlStartPending = false;
     this.resumeOnReplacement = false; this.enabled = false; this.epoch++; this.clearSession(); this.phase = "idle";
-    this.state("字幕翻譯已停止。"); this.showControls();
+    this.state(wasActive ? "字幕翻譯已停止。" : ""); this.showControls();
   }
 
   private clearSession(restoreNative = true): void {
