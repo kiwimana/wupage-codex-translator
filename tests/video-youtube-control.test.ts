@@ -300,6 +300,14 @@ it('ignores caption text and progress changes while the native button is already
   for(let i=0;i<30;i++){caption.textContent='Caption '+i;await flush();}
   expect(scan.mock.calls.filter(([selector])=>selector==='.wupage-ai-cc-button')).toHaveLength(0);
 });
+it('does not remeasure native overlay layouts on every playback tick',async()=>{
+  sessionClick();await flush();
+  const scan=vi.spyOn(video.parentElement!,'querySelectorAll');
+  await vi.advanceTimersByTimeAsync(2000);await flush();
+  expect(scan.mock.calls.filter(([selector])=>String(selector).includes('.metadata-container'))).toHaveLength(0);
+  window.dispatchEvent(new Event('resize'));
+  expect(scan.mock.calls.filter(([selector])=>String(selector).includes('.metadata-container'))).toHaveLength(1);
+});
 it('creates one controller for multiple YouTube video elements sharing a player', async()=>{
   player.dispose();
   const second=document.createElement('video');video.parentElement!.prepend(second);

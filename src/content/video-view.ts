@@ -4,6 +4,7 @@ import type { ExtensionSettings } from "../shared/types";
 import { normalizeVideoTranslation, SUBTITLE_FONT_SIZES, type SubtitleFontSize, type VideoTranslationSettings } from "../shared/video";
 import { uiIconMarkup } from "../shared/ui-icons";
 import type { SubtitleExportFormat, SubtitleExportMode } from "../video/subtitle-export";
+import { subtitleMenuPlacement, subtitleReadingArea, type VideoBox } from "./video-layout";
 
 let nextView = 0;
 export interface VideoViewActions {
@@ -19,15 +20,15 @@ export interface VideoViewActions {
 }
 
 const styles = `
-  :host { all: initial !important; position: absolute !important; top: var(--wp-layer-top,0px) !important; left: var(--wp-layer-left,0px) !important; width: var(--wp-layer-width,100%) !important; height: var(--wp-layer-height,100%) !important; z-index: 2147483600 !important; pointer-events: none !important; container-type: inline-size !important; color-scheme: dark !important; direction: ltr; } :host([hidden]) { display: none !important; }
+  :host { all: initial !important; position: absolute !important; top: var(--wp-layer-top,0px) !important; left: var(--wp-layer-left,0px) !important; width: var(--wp-layer-width,100%) !important; height: var(--wp-layer-height,100%) !important; z-index: 2147483600 !important; pointer-events: none !important; container-type: size !important; color-scheme: dark !important; direction: ltr; } :host([hidden]) { display: none !important; }
   * { box-sizing: border-box; } [hidden] { display: none !important; }
   .toolbar { position: absolute; right: 14px; top: 14px; display: flex; gap: 1px; align-items: center; color: #fff; background: #1c1928eb; border: 1px solid #ffffff29; border-radius: 9px; box-shadow: 0 3px 12px #0003; opacity: 0; transform: translateY(-3px); transition: opacity .16s,transform .16s; pointer-events: none; }
   :host([data-controls]) .toolbar, .toolbar:hover, .toolbar:focus-within, :host([data-panel]) .toolbar, :host([data-error]) .toolbar, :host([data-waiting]) .toolbar { opacity: 1; transform: none; pointer-events: auto; }
   :host([data-native-controls]:not([data-panel]):not([data-error]):not([data-waiting])) .toolbar { display: none; }
   :host([data-native-controls][data-context-settings]) .toolbar { display: none; }
   /* Shorts reserves its top row for CC, menu and fullscreen controls. */
-  :host([data-shorts]) .toolbar { top: 64px; right: 12px; }
-  :host([data-shorts]) .notice { top: 108px; right: 12px; }
+  :host([data-shorts]) .toolbar { top: var(--wp-toolbar-top,64px); right: 12px; }
+  :host([data-shorts]) .notice { top: calc(var(--wp-toolbar-top,64px) + 46px); right: 12px; }
   @container (max-width: 260px) { .toolbar .label { display: none; } }
   button, select, input { font: inherit; } button { cursor: pointer; } button:disabled { opacity: .5; cursor: default; }
   .toolbar button { border: 0; color: inherit; background: transparent; min-height: 34px; padding: 7px 10px; font: 500 12px/20px system-ui,sans-serif; }
@@ -59,11 +60,10 @@ const styles = `
   .notice { position: absolute; top: 58px; right: 14px; max-width: min(300px,calc(100% - 28px)); padding: 9px 12px; background: #1c1928ed; border: 1px solid #ffffff29; border-radius: 8px; color: #e4eeea; font: 12px/1.5 system-ui,sans-serif; pointer-events: auto; }
   @media (prefers-reduced-motion: reduce) { .toolbar { transition: none; } }
   :host([data-native-controls]) .toolbar { display: none; }
-  .captions { display:flex; flex-direction:column; gap:5px; width:max-content; max-width:90%; padding:10px 18px; border-radius:13px; background:var(--wp-video-bg,rgba(0,0,0,.88)); bottom:max(var(--wp-video-bottom,8%),46px); font-family:var(--wp-video-family,system-ui,sans-serif); font-size:clamp(12px,var(--wp-video-font,22px),9cqw); font-weight:var(--wp-video-weight,600); line-height:1.4; }
-  .source { order:var(--wp-source-order,0); font-size:clamp(12px,var(--wp-source-font,22px),9cqw); font-weight:inherit; margin:0; color:var(--wp-source-color,#fff); }
+  .captions { display:flex; flex-direction:column; gap:5px; width:max-content; left:var(--wp-caption-center,50%); max-width:var(--wp-caption-width,90%); padding:10px 18px; border-radius:13px; background:var(--wp-video-bg,rgba(0,0,0,.88)); bottom:max(var(--wp-video-bottom,8%),var(--wp-caption-safe-bottom,64px)); font-family:var(--wp-video-family,system-ui,sans-serif); font-size:clamp(12px,var(--wp-video-font,22px),min(9cqw,10cqh)); font-weight:var(--wp-video-weight,600); line-height:1.4; }
+  .source { order:var(--wp-source-order,0); font-size:clamp(12px,var(--wp-source-font,22px),min(9cqw,10cqh)); font-weight:inherit; margin:0; color:var(--wp-source-color,#fff); }
   .translation { order:var(--wp-translation-order,1); color:var(--wp-translation-color,#fff); }
   .source span,.translation span { padding:0; border-radius:0; background:transparent; }
-  @container(min-width:700px) { :host([data-panel][data-context-settings]) .captions { left:calc((100% - var(--wp-open-panel-width,292px))/2); max-width:calc(100% - var(--wp-open-panel-width,292px) - 40px); } }
   .panel { width:min(292px,calc(100vw - 24px)); padding:14px; border-radius:16px; background:#101010f7; border-color:#ffffff1c; color:#f5f5f5; }
   .panel[data-page="settings"],.panel[data-page="download"] { width:min(336px,calc(100vw - 24px)); }
   .panel header { gap:8px; margin-bottom:8px; } .panel h2 { flex:1; font-size:13px; display:flex; align-items:center; gap:8px; }
@@ -94,7 +94,7 @@ const styles = `
   :host([data-menu-control][data-enabled]) .toolbar { color:#decfff; border-color:#c4adff77; }
   :host([data-menu-control]) .toggle[aria-busy="true"] .mark svg { visibility:hidden; }
   :host([data-menu-control]) .toggle[aria-busy="true"] .mark { border:2px solid #d3bfff; border-right-color:transparent; }
-  :host([data-shorts]) .captions { bottom:max(var(--wp-video-bottom,8%),112px); max-width:calc(100% - 32px); padding:9px 13px; border-radius:10px; }
+  :host([data-shorts]) .captions { bottom:max(var(--wp-video-bottom,8%),var(--wp-caption-safe-bottom,112px)); padding:9px 13px; border-radius:10px; }
   .panel { width:min(288px,calc(100vw - 24px)); padding:16px; border-radius:14px; background:#171717fa; border-color:#ffffff20; font-size:13px; box-shadow:0 12px 40px #0007; scrollbar-width:thin; scrollbar-color:#626262 transparent; }
   .panel[data-page="settings"],.panel[data-page="download"] { width:min(352px,calc(100vw - 24px)); }
   .panel header { top:-16px; padding-top:3px; margin-bottom:4px; background:#171717; }
@@ -122,6 +122,10 @@ const styles = `
   .subtitle-policies legend { color:#ddd; font-size:12px; margin-bottom:4px; }
   .subtitle-policies .check { margin:10px 0 2px; font-size:12px; }
   .policy-help { margin:0 0 8px 22px; color:#999; font:11px/1.6 system-ui,sans-serif; }
+  @container(max-width:260px) {
+    :host([data-shorts]) .captions { font-size:clamp(12px,var(--wp-video-font,22px),6cqw); padding:7px 10px; gap:3px; }
+    :host([data-shorts]) .source { font-size:clamp(12px,var(--wp-source-font,22px),6cqw); }
+  }
 `;
 
 export class VideoView {
@@ -140,6 +144,8 @@ export class VideoView {
   private noticeTimer?: ReturnType<typeof setTimeout>;
   private panelAnchor?: HTMLElement;
   private cleanups: Array<() => void> = [];
+  private captionInsets = { left: 5, right: 5 };
+  private menuBounds?: VideoBox;
 
   constructor(private actions: VideoViewActions, label: string) {
     this.host.id = this.id; this.host.dataset.wupageVideo = ""; this.host.setAttribute("translate", "no");
@@ -170,6 +176,7 @@ export class VideoView {
         <label class="field">字幕背景<select class="background" aria-label="字幕背景"><option value="soft">圓角黑色底板</option><option value="solid">不透明黑底</option><option value="none">透明</option></select></label>
         <label class="field">背景不透明度 <output class="opacity-value">88%</output><input class="background-opacity" type="range" min="0" max="100" value="88"></label>
         <label class="field">字幕距底部 <output class="bottom-value">8%</output><input class="bottom-offset" type="range" min="0" max="40" value="8"></label>
+        <p class="help">字幕會自動預留播放器控制列與 Shorts 資訊區的空間。</p>
         <details class="advanced-settings"><summary>字幕來源與進階樣式</summary>
           <fieldset class="subtitle-policies"><legend>字幕處理</legend>
             <label class="check"><input class="prefer-human" type="checkbox" checked>優先人工字幕</label>
@@ -253,6 +260,7 @@ export class VideoView {
     this.on(this.root, "click", event => event.stopPropagation());
     this.on(document, "pointerdown", event => { const path = event.composedPath(); if (!this.panel.hidden && !path.includes(this.host) && (!this.panelAnchor || !path.includes(this.panelAnchor))) this.setPanel(false); }, true);
     this.on(window, "scroll", () => { if (this.panelOpen) this.positionPanel(); }, true);
+    if (window.visualViewport) { this.on(window.visualViewport, "resize", () => { if (this.panelOpen) this.positionPanel(); }); this.on(window.visualViewport, "scroll", () => { if (this.panelOpen) this.positionPanel(); }); }
     this.on(query(".advanced-settings"), "toggle", () => { if (this.panelOpen) this.positionPanel(); });
   }
 
@@ -278,6 +286,7 @@ export class VideoView {
       try { this.panel.hidePopover?.(); } catch { /* The panel may be outside the top layer after navigation. */ }
       this.panel.hidden = true;
       this.panelAnchor = undefined;
+      this.menuBounds = undefined; this.positionCaptions();
     }
     this.host.toggleAttribute("data-panel", open);
     this.root.querySelector(".settings")!.setAttribute("aria-expanded", String(open));
@@ -313,21 +322,38 @@ export class VideoView {
   positionPanel(): void {
     const anchor = this.panelAnchor?.isConnected ? this.panelAnchor : this.toggle;
     const button = anchor.getBoundingClientRect();
-    const width = Math.min(this.panel.dataset.page === "menu" ? 288 : 352, innerWidth - 24);
-    this.host.style.setProperty("--wp-open-panel-width", `${width}px`);
     const player = this.host.getBoundingClientRect(), shorts = this.host.hasAttribute("data-shorts");
-    const maxHeight = Math.max(120, Math.min(innerHeight - 24, shorts && player.height > 144 ? player.height - 24 : innerHeight - 24));
-    this.panel.style.maxHeight = `${maxHeight}px`;
-    const height = Math.min(this.panel.scrollHeight || 430, maxHeight);
-    let top = anchor !== this.toggle ? button.top - height - 8 : button.bottom + 8;
-    let left = button.right - width;
-    if (shorts && !document.fullscreenElement) {
-      // Keep a portrait video readable when the page has room beside it.
-      if (innerWidth - player.right >= width + 24) { left = player.right + 12; top = button.top; }
-      else if (player.left >= width + 24) { left = player.left - width - 12; top = button.top; }
+    const visual = window.visualViewport, viewport = new DOMRect(visual?.offsetLeft ?? 0, visual?.offsetTop ?? 0, visual?.width ?? innerWidth, visual?.height ?? innerHeight);
+    if (button.width > 0 && (button.bottom < viewport.top || button.top > viewport.bottom || button.right < viewport.left || button.left > viewport.right)) { this.setPanel(false); return; }
+    const desiredWidth = this.panel.dataset.page === "menu" ? 288 : 352;
+    this.panel.style.width = `${Math.min(desiredWidth, Math.max(0, viewport.width - 24))}px`;
+    const placement = subtitleMenuPlacement({ player, anchor: button, viewport, shorts, fullscreen: !!document.fullscreenElement, fallback: anchor === this.toggle,
+      width: desiredWidth, contentHeight: this.panel.scrollHeight ? this.panel.scrollHeight + 2 : 430, caption: this.caption.hidden ? undefined : this.caption.getBoundingClientRect() });
+    this.panel.style.width = `${placement.width}px`; this.panel.style.maxHeight = `${placement.maxHeight}px`;
+    this.panel.dataset.side = placement.side;
+    this.panel.style.setProperty("--wp-panel-left", `${placement.left}px`); this.panel.style.setProperty("--wp-panel-top", `${placement.top}px`);
+    this.menuBounds = { ...placement, right: placement.left + placement.width, bottom: placement.top + placement.height };
+    this.positionCaptions();
+  }
+
+  safeArea(toolbarTop: number, bottom: number, left: number, right: number): void {
+    this.captionInsets = { left, right };
+    this.css("--wp-toolbar-top", `${toolbarTop}px`); this.css("--wp-caption-safe-bottom", `${bottom}px`);
+    this.positionCaptions();
+  }
+
+  private css(name: string, value: string): void { if (this.host.style.getPropertyValue(name) !== value) this.host.style.setProperty(name, value); }
+
+  private positionCaptions(): void {
+    const { left, right } = this.captionInsets;
+    let center = (left + 100 - right) / 2, width = 100 - left - right;
+    if (this.panelOpen && this.menuBounds && !this.caption.hidden) {
+      const player = this.host.getBoundingClientRect(), caption = this.caption.getBoundingClientRect();
+      const reading = { top: caption.top, bottom: caption.bottom, height: caption.height,
+        left: player.left + player.width * left / 100, right: player.right - player.width * right / 100, width: player.width * width / 100 };
+      const area = subtitleReadingArea(player, this.menuBounds, reading, left, right); center = area.center; width = area.width;
     }
-    this.panel.style.setProperty("--wp-panel-left", `${Math.max(12, Math.min(innerWidth - width - 12, left))}px`);
-    this.panel.style.setProperty("--wp-panel-top", `${Math.max(12, Math.min(innerHeight - height - 12, top))}px`);
+    this.css("--wp-caption-center", `${center}%`); this.css("--wp-caption-width", `${width}%`);
   }
 
   setState(enabled: boolean, phase: "idle" | "loading" | "active" | "waiting" | "error", message: string): void {
@@ -388,6 +414,7 @@ export class VideoView {
     this.root.querySelector<HTMLInputElement>(".background-opacity")!.disabled = preferences.background !== "soft";
     this.setText(this.root.querySelector(".opacity-value")!, `${opacity}%`); this.setText(this.root.querySelector(".bottom-value")!, `${preferences.bottomOffset ?? 8}%`);
     this.root.querySelector<HTMLElement>(".preview-source")!.hidden = !preferences.showOriginal;
+    if (this.panelOpen) this.positionCaptions();
   }
 
   tracks(tracks: Array<{ id: string; label: string }>, selected = "auto"): void {
@@ -397,9 +424,11 @@ export class VideoView {
   }
 
   render(source: string, translation: string, preferences: VideoTranslationSettings): void {
+    const changed = this.source.textContent !== (preferences.showOriginal && source !== translation ? source : "") || this.translation.textContent !== translation;
     this.setText(this.source, preferences.showOriginal && source !== translation ? source : "");
     this.setText(this.translation, translation);
     this.caption.hidden = !translation;
+    if (changed && this.panelOpen) this.positionCaptions();
   }
 
   tell(message: string): void {

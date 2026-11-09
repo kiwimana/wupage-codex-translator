@@ -16,6 +16,7 @@ import { YouTubeAiControl } from "./youtube-ai-control";
 import { accountVideoProviderId } from "../shared/desktop-account";
 import { SubtitleArchive, serializeSubtitles, type SubtitleExportMode, type SubtitleExportFormat } from "../video/subtitle-export";
 import { dialogueText, humanSubtitlePairs, humanTargetTrack, HumanSubtitlePlayback, originalSubtitleTrack, prepareSubtitleCues } from "../video/subtitle-policies";
+import { subtitleInsets } from "./video-layout";
 
 export class PlayerSubtitleController {
   readonly view: VideoView;
@@ -29,6 +30,9 @@ export class PlayerSubtitleController {
   private usingHumanTranslation = false;
   private loadedHumanTrack = "";
   private filteredRenderedSound = false;
+  private uiLayoutKey = "";
+  private uiLayoutAt = 0;
+  private uiLayoutFrame?: number;
   private nativeTrack?: TextTrack;
   private timelineHasCues = false;
   private live?: LiveSubtitleTranslator;
@@ -87,7 +91,7 @@ export class PlayerSubtitleController {
       },
       import: file => { void this.importFile(file); },
       offset: value => { this.offset = value; this.live?.reset(); this.tick(); },
-      panel: open => this.youtubeControl?.setSettingsOpen(open),
+      panel: open => { this.youtubeControl?.setSettingsOpen(open); if (open) this.position(true); },
       download: (mode, format) => { void this.downloadSubtitles(mode, format); }
     }, this.site);
     if (getComputedStyle(container).position === "static") {
@@ -102,7 +106,7 @@ export class PlayerSubtitleController {
       this.youtubeControl = new YouTubeAiControl(container, attached => this.view.host.toggleAttribute("data-native-controls", attached),
         toggle => { this.showControls(); this.populateTracks(); this.view.setPanel(toggle ? !this.view.panelOpen : true, this.youtubeControl?.button); });
     }
-    this.on(container, "pointermove", () => this.showControls());
+    this.on(container, "pointermove", () => { this.showControls(); if (this.platform?.id === "youtube" && Date.now() - this.uiLayoutAt > 1000) this.position(true); });
     this.on(container, "pointerenter", () => this.showControls());
     this.on(container, "pointerleave", () => { if (!this.view.panelOpen) this.view.setControls(false); });
     this.on(video, "timeupdate", () => this.tick()); this.on(video, "pause", () => this.tick()); this.on(video, "playing", () => this.tick());
@@ -112,10 +116,11 @@ export class PlayerSubtitleController {
     this.on(video, "loadedmetadata", () => this.changedVideo());
     this.on(video, "enterpictureinpicture", () => { this.clearCaption(); this.view.tell("画中画中可在原播放器查看双语字幕。"); });
     this.on(document, "fullscreenchange", () => { this.position(); this.showControls(); this.tick(); });
-    this.on(window, "resize", () => this.position());
+    this.on(window, "resize", () => this.position(true));
     this.on(container, "click", event => {
       const target = event.target;
       if (!(target instanceof Element) || !event.isTrusted) return;
+      if (this.platform?.id === "youtube" && this.uiLayoutFrame === undefined) this.uiLayoutFrame = requestAnimationFrame(() => { this.uiLayoutFrame = undefined; this.position(true); });
       if (target.closest(this.platform?.toggle || ".wupage-no-caption-toggle")) this.nativeToggled = false;
       if (this.platform?.id === "youtube" && target.closest(".ytp-subtitles-button")?.getAttribute("aria-pressed") === "false") this.stop();
       if (this.enabled && target.closest("[class*='subtitle'],[class*='caption']")) this.lastCatalogue = 0;
@@ -611,7 +616,7 @@ export class PlayerSubtitleController {
     this.view.downloadState(false, "字幕設定已變更，請重新下載。");
   }
 
-  position(): void {
+  position(refreshUi = false): void {
     if (this.disposed) return;
     const shorts = this.platform?.id === "youtube" && (location.pathname.startsWith("/shorts/") || !!this.container.closest("ytd-reel-video-renderer,yt-shorts-player"));
     if (this.view.host.hasAttribute("data-shorts") !== shorts) this.view.setPanel(false);
@@ -632,6 +637,18 @@ export class PlayerSubtitleController {
     this.view.host.style.setProperty("--wp-layer-width", `${rect.width / (scaleX || 1)}px`);
     this.view.host.style.setProperty("--wp-layer-height", `${rect.height / (scaleY || 1)}px`);
     this.view.host.hidden = fullscreen === this.video || rect.width < 160 || rect.height < 90;
+    const layoutKey = [rect.left, rect.top, rect.width, rect.height, scaleX, scaleY, shorts, !!fullscreen, location.pathname, location.search].join(":");
+    if (this.platform?.id === "youtube" && (refreshUi || layoutKey !== this.uiLayoutKey)) {
+      this.uiLayoutKey = layoutKey; this.uiLayoutAt = Date.now();
+      const scope = shorts ? this.container.closest("ytd-reel-video-renderer,yt-shorts-player") ?? this.container : this.container;
+      const boxes = (selector: string, root: Element = scope) => Array.from(root.querySelectorAll<HTMLElement>(selector)).slice(0, 12).map(element => element.getBoundingClientRect());
+      const area = subtitleInsets(rect, shorts,
+        boxes(".ytReelPlayerHeaderViewModelHost,.reel-player-header,.ytp-chrome-top"),
+        boxes(".ytReelPlayerMetadataViewModelHost,.reel-player-metadata-container,.reel-player-overlay-metadata,.metadata-container"),
+        boxes(".ytShortsVideoActionBarViewModelHost,.reel-player-actions,#actions"),
+        boxes(".ytp-chrome-bottom,.ytp-right-controls", this.container));
+      this.view.safeArea(area.toolbarTop / (scaleY || 1), area.bottom / (scaleY || 1), area.left, area.right);
+    }
     if (this.view.panelOpen) this.view.positionPanel();
   }
 
@@ -667,6 +684,7 @@ export class PlayerSubtitleController {
     if (this.disposed) return;
     const resume = preserveTranslation && this.enabled;
     this.stop(); this.disposed = true; clearTimeout(this.controlsTimer);
+    if (this.uiLayoutFrame !== undefined) cancelAnimationFrame(this.uiLayoutFrame);
     this.resumeOnReplacement = resume;
     for (const cleanup of this.cleanups) cleanup(); this.cleanups.length = 0;
     if (this.originalPosition && this.container.style.position === "relative") {
