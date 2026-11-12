@@ -1,8 +1,56 @@
 /** Scoped rules keep page typography and layout independent of the controls. */
 export const floatingRefreshStyles = `
+  #wupage-floating-hitbox[data-quick-settings] .wupage-floating-tools {
+    all: initial;
+    position: absolute;
+    left: 0;
+    top: calc(var(--wp-floating-padding) + var(--wp-floating-size));
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 8px 0;
+    pointer-events: auto;
+    animation: wupage-floating-tools-enter 140ms ease-out;
+  }
+  #wupage-floating-hitbox[data-quick-settings] .wupage-floating-tools[hidden] { display: none; }
+  #wupage-floating-hitbox[data-tools-placement="above"] .wupage-floating-tools {
+    top: auto;
+    bottom: calc(var(--wp-floating-padding) + var(--wp-floating-size));
+  }
+  #wupage-floating-settings {
+    all: initial;
+    box-sizing: border-box;
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: 1px solid var(--wp-border, #45434d);
+    border-radius: 50%;
+    color: var(--wp-foreground, #f4f2fa);
+    background: var(--wp-surface, #24222b);
+    box-shadow: 0 4px 14px #0003;
+    cursor: pointer;
+    touch-action: manipulation;
+    transition: background 140ms ease, color 140ms ease, box-shadow 140ms ease;
+  }
+  #wupage-floating-settings svg { width: 19px; height: 19px; }
+  #wupage-floating-settings:hover, #wupage-floating-settings[aria-expanded="true"] {
+    color: var(--wp-accent, #c9afff);
+    background: var(--wp-selected, #35303f);
+    box-shadow: 0 5px 18px #0004;
+  }
+  #wupage-floating-settings:focus-visible { outline: 3px solid var(--wp-accent, #c9afff); outline-offset: 3px; }
+  @keyframes wupage-floating-tools-enter { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: scale(1); } }
+  @media (prefers-reduced-motion: reduce) {
+    #wupage-floating-settings { transition: none; }
+    #wupage-floating-hitbox[data-quick-settings] .wupage-floating-tools { animation: none; }
+  }
   #wupage-floating-ball {
     border: 1px solid color-mix(in srgb, var(--wp-floating-foreground) 20%, transparent);
-    border-radius: 18px;
+    border-radius: 50%;
     background: linear-gradient(145deg, color-mix(in srgb, var(--wp-floating-background) 88%, #fff), var(--wp-floating-background));
     box-shadow: 0 5px 18px #17112730, inset 0 1px 0 #ffffff30;
   }

@@ -59,6 +59,18 @@ try{
   check(`${id}: model saved with manual-only detection and connection`);
  }
  const content=await page(fixture);await waitFor(()=>evaluate(content.session,`document.querySelector('#wupage-floating-hitbox')?.hidden===false`));
+ await send('Page.bringToFront',{},content.session);
+ const floating=()=>evaluate(content.session,`(()=>{const b=document.getElementById('wupage-floating-ball'),t=document.querySelector('.wupage-floating-tools'),g=document.getElementById('wupage-floating-settings');return {ball:b.getBoundingClientRect().toJSON(),gear:g.getBoundingClientRect().toJSON(),hidden:t.hidden,count:t.querySelectorAll('button').length,menu:!document.getElementById('wupage-floating-menu').hidden};})()`);
+ const mouse=async(type,x,y)=>send('Input.dispatchMouseEvent',{type,x,y,...(type==='mouseMoved'?{}:{button:'left',clickCount:1})},content.session);
+ const tap=async(x,y)=>{await mouse('mouseMoved',x,y);await mouse('mousePressed',x,y);await mouse('mouseReleased',x,y);};
+ let f=await floating();assert.equal(f.hidden,true);
+ await mouse('mouseMoved',f.ball.left+26,f.ball.top+26);await delay(650);f=await floating();
+ assert.equal(f.hidden,false);assert.equal(f.count,1);assert.equal(f.gear.width,40);assert.equal(f.menu,false);
+ await tap(f.gear.left+20,f.gear.top+20);assert.equal((await floating()).menu,true);
+ await mouse('mouseMoved',20,20);await delay(650);assert.equal((await floating()).menu,true);
+ const floatingShot=await send('Page.captureScreenshot',{format:'png'},content.session);await fs.writeFile(path.join(output,'chrome-floating-settings.png'),Buffer.from(floatingShot.data,'base64'));
+ await tap(20,20);f=await floating();assert.equal(f.menu,false);assert.equal(f.hidden,true);
+ check('floating hover reveals one 40px settings gear; physical clicks keep its panel open until dismissed without AI work');
  const tabId=await api(`return (await chrome.tabs.query({})).find(t=>t.url===${JSON.stringify(fixture)}).id;`);
  await api(`await chrome.tabs.update(${tabId},{active:true});await chrome.action.openPopup();return true;`);
  const popupTarget=await waitFor(async()=>{const {targetInfos}=await send('Target.getTargets');return targetInfos.find(t=>t.url===base+'popup.html');});

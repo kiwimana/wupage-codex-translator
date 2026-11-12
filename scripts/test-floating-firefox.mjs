@@ -30,7 +30,8 @@ try{
   const select=()=>firefox.command('WebDriver:SwitchToWindow',{handle:page});await select();await firefox.command('WebDriver:Navigate',{url});
   const metrics=()=>firefox.execute(`const b=document.getElementById('wupage-floating-ball'),h=document.getElementById('wupage-floating-hitbox');return {ball:b?.getBoundingClientRect().toJSON(),hitbox:h?.getBoundingClientRect().toJSON(),hidden:h?.hidden,width:innerWidth,edge:b?.dataset.edge,menu:!document.getElementById('wupage-floating-menu')?.hidden};`);
   await waitFor(metrics,v=>v.ball?.width>0&&!v.hidden,'ball ready');
-  let m=await metrics();assert.equal(m.ball.width,52);assert.equal(m.hitbox.width,72);assert.ok(m.ball.right<=m.width-12);report.initial=m;
+  let m=await metrics();assert.equal(m.ball.width,52);assert.equal(m.hitbox.width,72);assert.ok(m.ball.right<=m.width-12);
+  assert.equal(await firefox.execute(`return getComputedStyle(document.getElementById('wupage-floating-ball')).borderRadius;`),'50%');report.initial=m;
   check('legacy right-edge position becomes a fully visible 52px ball with a 72px click target');
   const move=async(x,y,duration=50)=>firefox.command('WebDriver:PerformActions',{actions:[{type:'pointer',id:'ball-mouse',parameters:{pointerType:'mouse'},actions:[{type:'pointerMove',duration,x:Math.round(x),y:Math.round(y)}]}]});
   const click=async(x,y,jitter=0)=>firefox.command('WebDriver:PerformActions',{actions:[{type:'pointer',id:'ball-mouse',parameters:{pointerType:'mouse'},actions:[{type:'pointerMove',duration:50,x:Math.round(x),y:Math.round(y)},{type:'pointerDown',button:0},{type:'pointerMove',duration:60,x:Math.round(x+jitter),y:Math.round(y)},{type:'pointerUp',button:0}]}]});
@@ -40,9 +41,16 @@ try{
   check('a physical mouse click outside the visible circle starts translation exactly once');
   await click(x,y);await waitFor(translated,v=>!v,'restore original');
   await move(100,100);await move(x,y);await delay(650);const hovered=await metrics();
-  assert.equal(hovered.ball.left,m.ball.left);assert.equal(hovered.ball.top,m.ball.top);assert.equal(hovered.menu,true);
+  assert.equal(hovered.ball.left,m.ball.left);assert.equal(hovered.ball.top,m.ball.top);assert.equal(hovered.menu,false);
+  const gear=()=>firefox.execute(`const t=document.querySelector('.wupage-floating-tools'),b=document.getElementById('wupage-floating-settings');return {hidden:t.hidden,count:t.querySelectorAll('button').length,rect:b.getBoundingClientRect().toJSON(),expanded:b.getAttribute('aria-expanded')};`);
+  let g=await gear();assert.equal(g.hidden,false);assert.equal(g.count,1);assert.equal(g.rect.width,40);assert.equal(requests,1);
+  await move(g.rect.left+20,g.rect.top+20);await delay(350);assert.equal((await gear()).hidden,false);
+  await click(g.rect.left+20,g.rect.top+20);assert.equal((await metrics()).menu,true);assert.equal(requests,1);
+  await move(100,100);await delay(650);assert.equal((await metrics()).menu,true);
+  check('hover reveals exactly one settings button; crossing its gap and clicking opens a persistent panel without translation');
+  await click(g.rect.left+20,g.rect.top+20);assert.equal((await metrics()).menu,false);
   await click(x,y);await waitFor(translated,Boolean,'padding while menu open');
-  check('hover and the open settings menu do not move the ball or disable the outer target');
+  check('the settings controls do not move the ball or disable its outer click target');
   await click(x,y);await waitFor(translated,v=>!v,'restore before drag');
   await firefox.command('WebDriver:PerformActions',{actions:[{type:'pointer',id:'ball-mouse',parameters:{pointerType:'mouse'},actions:[{type:'pointerMove',duration:50,x:Math.round(x),y:Math.round(y)},{type:'pointerDown',button:0},{type:'pointerMove',duration:300,x:Math.round(x-250),y:Math.round(y)},{type:'pointerUp',button:0}]}]});
   const dragged=await metrics();assert.ok(dragged.ball.left<m.ball.left-200);assert.equal(await translated(),false);assert.equal(requests,1);
@@ -57,7 +65,29 @@ try{
   await api(`await chrome.storage.local.set({'wupage.floating.position':{left:9999,top:350,edge:'right'}});`);await select();await waitFor(metrics,v=>v.edge==='right','right edge restore');m=await metrics();
   await click(m.hitbox.left-3,m.ball.top+26);assert.equal(await firefox.execute('return Number(document.body.dataset.pageClicks||0)'),1);
   check('nearby page controls outside the target remain clickable');
+  await api(`await chrome.storage.local.set({'wupage.floating.position':{left:9999,top:9999,edge:'right'}});`);await select();
+  m=await waitFor(metrics,v=>v.ball.top>500,'bottom edge restore');await move(m.ball.left+26,m.ball.top+26);await delay(300);g=await gear();
+  assert.equal(g.hidden,false);assert.ok(g.rect.bottom<=m.ball.top-7);assert.ok(g.rect.top>=0);assert.ok(g.rect.right<=m.width);
+  await move(100,100);await delay(350);assert.equal((await gear()).hidden,true);
+  const keyboard=async(value)=>firefox.command('WebDriver:PerformActions',{actions:[{type:'key',id:'floating-keyboard',actions:[{type:'keyDown',value},{type:'keyUp',value}]}]});
+  await firefox.execute(`document.getElementById('behind').focus();`);await keyboard('\uE004');
+  assert.equal(await firefox.execute(`return document.activeElement.id;`),'wupage-floating-ball');
+  await keyboard('\uE004');
+  assert.equal(await firefox.execute(`return document.activeElement.id;`),'wupage-floating-settings');
+  await keyboard('\uE007');assert.equal((await metrics()).menu,true);assert.equal(requests,1);
+  await keyboard('\uE00C');assert.equal((await metrics()).menu,false);
+  check('settings flip above the bottom edge and work with Tab, Enter and Escape without AI requests');
+  await firefox.command('WebDriver:SetWindowRect',{width:760,height:640});
+  await api(`await chrome.storage.local.set({'wupage.floating.position':{left:9999,top:220,edge:'right'}});`);await select();
+  m=await waitFor(metrics,v=>v.ball.top===220,'preview restore');
+  await click(m.ball.left+26,m.ball.top+26);await waitFor(translated,v=>!v,'preview original');
+  await firefox.execute(`document.body.style.cssText='margin:44px;background:#111018;color:#eeeaf6;font:16px/1.8 system-ui';document.getElementById('behind').hidden=true;const h=document.createElement('h1');h.textContent='WuPage 浮球操作預覽';h.style.cssText='font-size:24px;margin:0 0 24px';document.body.prepend(h);const p=document.querySelector('p');p.style.cssText='max-width:470px;padding:24px;border:1px solid #393442;border-radius:18px;background:#1e1b28';const note=document.createElement('div');note.textContent='移入浮球顯示齒輪，點擊齒輪開啟設定。';note.style.cssText='font-size:14px;color:#bdb3cd;margin-top:26px';document.body.append(note);`);
+  await firefox.execute(`document.body.tabIndex=-1;document.body.focus();`);
+  await move(100,300);await move(m.ball.left+26,m.ball.top+26);await delay(200);
+  assert.equal((await gear()).hidden,false);
   const shot=await firefox.command('WebDriver:TakeScreenshot',{id:null,highlights:[],full:false});await fs.writeFile(path.join(output,'floating-visible.png'),Buffer.from(shot.value,'base64'));
+  g=await gear();await click(g.rect.left+20,g.rect.top+20);
+  const settingsShot=await firefox.command('WebDriver:TakeScreenshot',{id:null,highlights:[],full:false});await fs.writeFile(path.join(output,'floating-settings.png'),Buffer.from(settingsShot.value,'base64'));
   report.passed=true;
 }catch(error){report.error=String(error);throw error;}
 finally{if(firefox)await firefox.close();await new Promise(resolve=>server.close(resolve));await fs.mkdir(output,{recursive:true});await fs.writeFile(path.join(output,'report.json'),JSON.stringify(report,null,2));}

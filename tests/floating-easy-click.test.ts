@@ -33,6 +33,7 @@ beforeEach(async()=>{
 });
 afterEach(()=>{
   clearPageTranslation();
+  vi.clearAllTimers();vi.useRealTimers();
   for(const args of documentListeners.mock.calls)document.removeEventListener(...args as Parameters<Document["removeEventListener"]>);
   for(const args of windowListeners.mock.calls)window.removeEventListener(...args as Parameters<Window["removeEventListener"]>);
   vi.restoreAllMocks();vi.unstubAllGlobals();vi.mocked(sendRuntimeRequest).mockReset();document.documentElement.replaceChildren();
@@ -60,4 +61,51 @@ it("dragging from the outer target moves the ball without translating",()=>{
   ball().dispatchEvent(pointer("pointerup",900,420));hitbox().click();
   expect(ball().getBoundingClientRect().left).toBeLessThan(1000);
   expect(requests()).toHaveLength(0);
+});
+const tools=()=>document.querySelector<HTMLElement>(".wupage-floating-tools")!;
+const settingsButton=()=>document.getElementById("wupage-floating-settings") as HTMLButtonElement;
+const menu=()=>document.getElementById("wupage-floating-menu")!;
+it("reveals only one settings action on hover without opening a panel or translating",()=>{
+  vi.useFakeTimers();
+  expect(tools().hidden).toBe(true);
+  hitbox().dispatchEvent(pointer("pointerenter",1150,420));
+  vi.advanceTimersByTime(900);
+  expect(tools().hidden).toBe(false);
+  expect(tools().querySelectorAll("button")).toHaveLength(1);
+  expect(menu().hidden).toBe(true);
+  expect(requests()).toHaveLength(0);
+  hitbox().dispatchEvent(pointer("pointerleave",1100,420));
+  vi.advanceTimersByTime(300);
+  expect(tools().hidden).toBe(true);
+});
+it("opens a persistent settings panel without triggering translation or drag",()=>{
+  vi.useFakeTimers();
+  hitbox().dispatchEvent(pointer("pointerenter",1150,420));
+  settingsButton().dispatchEvent(pointer("pointerdown",1150,490));
+  settingsButton().click();
+  expect(menu().hidden).toBe(false);
+  expect(settingsButton().getAttribute("aria-expanded")).toBe("true");
+  hitbox().dispatchEvent(pointer("pointerleave",900,420));
+  menu().dispatchEvent(pointer("pointerleave",900,420));
+  vi.advanceTimersByTime(900);
+  expect(menu().hidden).toBe(false);
+  expect(requests()).toHaveLength(0);
+  document.querySelector("p")!.click();
+  expect(menu().hidden).toBe(true);
+  expect(tools().hidden).toBe(true);
+  expect(settingsButton().getAttribute("aria-expanded")).toBe("false");
+});
+it("can toggle settings closed and dismiss the tools with Escape",()=>{
+  settingsButton().click();expect(menu().hidden).toBe(false);
+  settingsButton().click();expect(menu().hidden).toBe(true);
+  settingsButton().click();
+  document.dispatchEvent(new KeyboardEvent("keydown",{key:"Escape",bubbles:true}));
+  expect(menu().hidden).toBe(true);expect(tools().hidden).toBe(true);
+  expect(requests()).toHaveLength(0);
+});
+it("places settings above a low ball and below it again when moved up",()=>{
+  emit({[positionKey]:{newValue:{left:1100,top:730,edge:"right"}}},"local");
+  expect(hitbox().dataset.toolsPlacement).toBe("above");
+  emit({[positionKey]:{newValue:{left:1100,top:100,edge:"right"}}},"local");
+  expect(hitbox().dataset.toolsPlacement).toBe("below");
 });

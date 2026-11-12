@@ -18,4 +18,6 @@ Chrome 模式是 `chrome-chatgpt`，輸出 `dist-chrome-chatgpt/`；保留 modul
 
 實際 Firefox 測試使用獨立瀏覽器設定檔。可設定 `FIREFOX_BINARY`，執行 `scripts/test-popup-firefox.mjs`、`scripts/test-floating-firefox.mjs`、`scripts/test-shorts-layout-firefox.mjs` 與 `scripts/test-ui-refresh-firefox.mjs`。UI 檢查使用本機測試頁或模擬翻譯服務；`test-chatgpt-*`、`test-cc-firefox.mjs` 及 `test-youtube-control-firefox.mjs` 可能使用執行者自己的 ChatGPT 額度。
 
+若 Firefox 要求 System access，僅在隔離測試程序設定 `MOZ_REMOTE_ALLOW_SYSTEM_ACCESS=1`。浮球測試驗證實際滑鼠移入只顯示一個設定齒輪、面板保持開啟、外側點擊關閉、底部換邊及 Tab／Enter／Escape；翻譯只連接本機模擬服務。
+
 安裝程式解析執行者電腦上的 Node.js 與 Codex／Gemini CLI／Claude Code、編譯啟動器並註冊目前使用者的原生主機。`bridge.config.json` 與主機 JSON 只存於本機；主機不開 HTTP 伺服器。`detect` 只檢查安裝檔；`connect` 必須從設定頁明確點擊才開啟登入，不自動驗證帳號。模型是經驗證的獨立參數；來源文字只經 stdin 傳送。其他開發說明見 [development.md](development.md)。

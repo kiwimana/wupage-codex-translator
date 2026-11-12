@@ -66,6 +66,8 @@ let dragStartX = 0;
 let dragStartY = 0;
 let menuOpenTimer: number | undefined;
 let menuCloseTimer: number | undefined;
+let toolsCloseTimer: number | undefined;
+let menuPinned = false;
 let longPressTimer: number | undefined;
 let activePointerId: number | undefined;
 let longPressTriggered = false;
@@ -102,6 +104,8 @@ export function initFloatingBall(): void {
   cancelMenuOpen();
   cancelMenuClose();
   cancelLongPress();
+  window.clearTimeout(toolsCloseTimer);
+  menuPinned = false;
   activePointerId = undefined;
   dragging = movedDuringDrag = longPressTriggered = touchInteraction = false;
   menuError = null;
@@ -116,6 +120,7 @@ export function initFloatingBall(): void {
   const hitbox = document.createElement("div");
   hitbox.id = FLOATING_HITBOX_ID;
   if (CHATGPT_BUILD) {
+    hitbox.dataset.quickSettings = "true";
     hitbox.style.setProperty("--wp-floating-size", `${FLOATING_SIZE}px`);
     hitbox.style.setProperty("--wp-floating-padding", `${HITBOX_PADDING}px`);
     hitbox.style.setProperty("--wp-floating-reveal", "0px");
@@ -157,7 +162,10 @@ export function initFloatingBall(): void {
     if (touchInteraction) event.preventDefault();
   });
   button.addEventListener("focus", () => {
-    if (shortcutEnabled["floating-controls"] && button.matches(":focus-visible")) openMenu();
+    if (shortcutEnabled["floating-controls"] && button.matches(":focus-visible")) {
+      if (CHATGPT_BUILD) revealFloatingTools();
+      else openMenu();
+    }
   });
   button.addEventListener("keydown", (event) => {
     if (event.isComposing || event.keyCode === 229) return;
@@ -174,13 +182,39 @@ export function initFloatingBall(): void {
   });
   hitbox.addEventListener("pointerenter", (event) => {
     touchInteraction = event.pointerType === "touch";
-    if (touchInteraction) cancelMenuClose();
+    if (CHATGPT_BUILD) { cancelMenuClose(); revealFloatingTools(); }
+    else if (touchInteraction) cancelMenuClose();
     else scheduleMenuOpen();
   });
-  hitbox.addEventListener("pointerleave", scheduleMenuClose);
-  hitbox.addEventListener("focusout", scheduleMenuClose);
+  hitbox.addEventListener("pointerleave", () => { scheduleMenuClose(); scheduleToolsClose(); });
+  hitbox.addEventListener("focusout", () => { scheduleMenuClose(); scheduleToolsClose(); });
 
   hitbox.append(button);
+  if (CHATGPT_BUILD) {
+    const tools = document.createElement("div");
+    tools.className = "wupage-floating-tools";
+    tools.hidden = true;
+    const settings = document.createElement("button");
+    settings.id = "wupage-floating-settings";
+    settings.type = "button";
+    settings.title = "翻譯設定";
+    settings.setAttribute("aria-label", "開啟翻譯設定");
+    settings.setAttribute("aria-haspopup", "dialog");
+    settings.setAttribute("aria-controls", "wupage-floating-menu");
+    settings.setAttribute("aria-expanded", "false");
+    settings.innerHTML = uiIconMarkup("settings");
+    settings.addEventListener("focus", revealFloatingTools);
+    settings.addEventListener("pointerdown", event => event.stopPropagation());
+    settings.addEventListener("click", event => {
+      event.stopPropagation();
+      const menu = document.getElementById("wupage-floating-menu");
+      if (!menu) return;
+      if (!menu.hidden) setMenuOpen(menu, false);
+      else { menuPinned = true; openMenu(); }
+    });
+    tools.append(settings);
+    hitbox.append(tools);
+  }
   document.documentElement.append(hitbox);
   createHighlight();
   createMenu();
@@ -206,15 +240,18 @@ export function initFloatingBall(): void {
     cancelMenuOpen();
     cancelLongPress();
     const menu = document.getElementById("wupage-floating-menu");
-    if (!menu || menu.hidden) return;
+    if (document.activeElement?.id === "wupage-floating-settings") button.focus({ preventScroll: true });
+    if (!menu || menu.hidden) { hideFloatingTools(); return; }
     event.preventDefault();
     if (menu.contains(document.activeElement)) button.focus({ preventScroll: true });
     setMenuOpen(menu, false);
+    hideFloatingTools();
   });
   window.addEventListener("pagehide", () => {
     cancelLongPress();
     cancelMenuOpen();
     cancelMenuClose();
+    window.clearTimeout(toolsCloseTimer);
   }, { once: true });
 }
 
@@ -309,6 +346,7 @@ function startDrag(event: PointerEvent): void {
   dragStartY = event.clientY;
   const menu = document.getElementById("wupage-floating-menu");
   if (menu) setMenuOpen(menu, false);
+  hideFloatingTools();
   button.setPointerCapture(event.pointerId);
   button.addEventListener("pointermove", drag);
   button.addEventListener("pointerup", stopDrag);
@@ -588,10 +626,33 @@ function cancelMenuClose(): void {
   menuCloseTimer = undefined;
 }
 
+function revealFloatingTools(): void {
+  window.clearTimeout(toolsCloseTimer);
+  if (dragging || !floatingBallEnabled) return;
+  const tools = document.getElementById(FLOATING_HITBOX_ID)?.querySelector<HTMLElement>(".wupage-floating-tools");
+  if (tools) tools.hidden = false;
+}
+
+function hideFloatingTools(): void {
+  window.clearTimeout(toolsCloseTimer);
+  const tools = document.getElementById(FLOATING_HITBOX_ID)?.querySelector<HTMLElement>(".wupage-floating-tools");
+  if (tools) tools.hidden = true;
+}
+
+function scheduleToolsClose(): void {
+  window.clearTimeout(toolsCloseTimer);
+  toolsCloseTimer = window.setTimeout(() => {
+    const hitbox = document.getElementById(FLOATING_HITBOX_ID);
+    const menu = document.getElementById("wupage-floating-menu");
+    if (hitbox?.matches(":hover") || (hitbox?.contains(document.activeElement) && document.activeElement?.matches(":focus-visible")) || (menu && !menu.hidden)) return;
+    hideFloatingTools();
+  }, MENU_CLOSE_DELAY);
+}
+
 function scheduleMenuClose(): void {
   cancelMenuOpen();
   cancelMenuClose();
-  if (touchInteraction) return;
+  if (touchInteraction || menuPinned) return;
   menuCloseTimer = window.setTimeout(() => {
     menuCloseTimer = undefined;
     const menu = document.getElementById("wupage-floating-menu");
@@ -600,6 +661,8 @@ function scheduleMenuClose(): void {
     if (menu?.contains(document.activeElement) &&
       (document.activeElement instanceof HTMLSelectElement || document.activeElement?.matches(":focus-visible"))) return;
     if (menu) setMenuOpen(menu, false);
+    const hitbox = document.getElementById(FLOATING_HITBOX_ID);
+    if (!hitbox?.matches(":hover") && !(hitbox?.contains(document.activeElement) && document.activeElement?.matches(":focus-visible"))) hideFloatingTools();
   }, MENU_CLOSE_DELAY);
 }
 
@@ -643,6 +706,7 @@ function closeMenuOnOutsideClick(event: MouseEvent): void {
   if (target.closest(`#${FLOATING_ID}, #${FLOATING_HITBOX_ID}, #wupage-floating-menu`)) return;
   const menu = document.getElementById("wupage-floating-menu");
   if (menu) setMenuOpen(menu, false);
+  hideFloatingTools();
 }
 
 async function updateMenuState(menu: HTMLElement): Promise<void> {
@@ -833,6 +897,7 @@ function setButtonPosition(button: HTMLElement, left: number, top: number): void
   target.style.setProperty("top", `${top - offset}px`, "important");
   target.style.setProperty("right", "auto", "important");
   target.style.setProperty("bottom", "auto", "important");
+  if (hitbox && CHATGPT_BUILD) hitbox.dataset.toolsPlacement = top + getFloatingSize(button) + 64 > window.innerHeight - EDGE_MARGIN ? "above" : "below";
 
   const menu = document.getElementById("wupage-floating-menu");
   if (menu && isMenuOpen(menu)) positionMenu(menu, button);
@@ -842,6 +907,7 @@ function setMenuOpen(menu: HTMLElement, open: boolean): void {
   cancelMenuOpen();
   cancelMenuClose();
   if (!open) cancelLongPress();
+  if (!open) menuPinned = false;
   menu.hidden = !open;
   if (open) {
     if (menuOcr) void menuOcr.refresh();
@@ -863,6 +929,8 @@ function setMenuOpen(menu: HTMLElement, open: boolean): void {
   const button = document.getElementById(FLOATING_ID);
   button?.classList.toggle("is-menu-open", open);
   button?.setAttribute("aria-expanded", String(open));
+  document.getElementById("wupage-floating-settings")?.setAttribute("aria-expanded", String(open));
+  if (open) revealFloatingTools();
 }
 
 function isMenuOpen(menu: HTMLElement): boolean {
@@ -1001,6 +1069,7 @@ export function refreshTranslationState(): void {
 
 function floatingBallTitle(action: string): string {
   const touch = touchInteraction || window.matchMedia?.("(hover: none) and (pointer: coarse)").matches;
+  if (CHATGPT_BUILD) return `${touch ? "輕點" : "點擊"}${action} · ${touch ? "長按開啟設定" : "移入顯示設定按鈕"} · 拖曳調整位置`;
   return `${touch ? "轻点" : "单击"}${action} · ${touch ? "长按" : "悬停"}打开菜单 · 拖动调整位置`;
 }
 
@@ -1361,6 +1430,7 @@ function applyFloatingBallVisibility(): void {
     hitbox.hidden = !floatingBallEnabled || hitbox.dataset.positionReady !== "true";
   }
   if (!floatingBallEnabled) {
+    hideFloatingTools();
     if (menu) setMenuOpen(menu, false);
     setActiveParagraph(null);
   }
