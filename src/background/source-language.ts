@@ -1,8 +1,10 @@
 /** Uses the browser's local detector, shared by providers that need a source language. */
-export async function detectSourceLanguage(texts: readonly string[], signal?: AbortSignal): Promise<string | undefined> {
+export async function detectSourceLanguage(texts: readonly string[], signal?: AbortSignal,
+  detect: (text: string) => Promise<chrome.i18n.LanguageDetectionResult> = text => chrome.i18n.detectLanguage(text)
+): Promise<string | undefined> {
   signal?.throwIfAborted();
   if (!texts.length) return undefined;
-  const detection = chrome.i18n.detectLanguage(texts.join("\n").slice(0, 12000));
+  const detection = detect(texts.join("\n").slice(0, 12000));
   let onAbort: (() => void) | undefined;
   try {
     const result = signal ? await new Promise<chrome.i18n.LanguageDetectionResult>((resolve, reject) => {

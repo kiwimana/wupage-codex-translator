@@ -28,7 +28,8 @@ function compatibleScript(text: string, language: string, script: string): boole
   return scripts.every(candidate => allowed.includes(candidate) || !new RegExp(`\\p{Script=${candidate}}`, "u").test(text));
 }
 
-async function detectedSameLanguage(text: string, target: string, signal?: AbortSignal): Promise<boolean> {
+async function detectedSameLanguage(text: string, target: string, signal?: AbortSignal,
+  detect?: (text: string) => Promise<chrome.i18n.LanguageDetectionResult>): Promise<boolean> {
   const sample = languageSample(text);
   // A truncated sample must not hide foreign text later in the same segment.
   if (sample.length > MAX_SAMPLE || !/\p{L}/u.test(sample) || typeof chrome === "undefined" || !chrome.i18n?.detectLanguage) return false;
@@ -36,7 +37,7 @@ async function detectedSameLanguage(text: string, target: string, signal?: Abort
   let onAbort: (() => void) | undefined;
   try {
     const result = await Promise.race([
-      chrome.i18n.detectLanguage(sample),
+      detect ? detect(sample) : chrome.i18n.detectLanguage(sample),
       new Promise<undefined>(resolve => { timer = setTimeout(() => resolve(undefined), TIMEOUT_MS); }),
       ...(signal ? [new Promise<never>((_resolve, reject) => {
         onAbort = () => reject(signal.reason); signal.addEventListener("abort", onAbort, { once: true });
@@ -63,7 +64,8 @@ async function detectedSameLanguage(text: string, target: string, signal?: Abort
 }
 
 /** Per-item checks preserve mixed-language batches and their original order. */
-export async function sameLanguageIndexes(request: TranslateBatchRequest, signal?: AbortSignal): Promise<number[]> {
+export async function sameLanguageIndexes(request: TranslateBatchRequest, signal?: AbortSignal,
+  detect?: (text: string) => Promise<chrome.i18n.LanguageDetectionResult>): Promise<number[]> {
   signal?.throwIfAborted();
   if (request.sourceLang && request.sourceLang !== "auto") {
     if (sameTranslationLanguage(request.sourceLang, request.targetLang)) return request.texts.map((_text, index) => index);
@@ -85,7 +87,7 @@ export async function sameLanguageIndexes(request: TranslateBatchRequest, signal
       if (Date.now() >= deadline) return;
       const index = cursor++, text = request.texts[index];
       let result = memo.get(text);
-      if (!result) { result = detectedSameLanguage(text, request.targetLang, signal); memo.set(text, result); }
+      if (!result) { result = detectedSameLanguage(text, request.targetLang, signal, detect); memo.set(text, result); }
       if (await result) skipped.push(index);
     }
   };

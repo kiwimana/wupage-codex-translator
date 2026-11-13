@@ -69,6 +69,27 @@ afterEach(() => {
 });
 
 describe("Doubao integration with the common translation path", () => {
+  it("shares reliable same-language evidence without creating a provider or cache task", async () => {
+    const storage = memoryStorage();
+    detectLanguage.mockResolvedValueOnce({ isReliable: true, languages: [{ language: "zh-CN", percentage: 99 }] });
+    const texts = ["这是一段已经符合目标语言的完整测试文字。"];
+    const result = await translateWithSettings(settings(true), { texts, sourceLang: "auto", targetLang: "zh-CN" });
+    expect(result).toEqual({ translations: texts, cached: 0, skippedIndexes: [0] });
+    expect(detectLanguage).toHaveBeenCalledOnce(); expect(createProvider).not.toHaveBeenCalled();
+    expect(storage.get).not.toHaveBeenCalled(); expect(storage.set).not.toHaveBeenCalled();
+  });
+
+  it("uses the remaining foreign language after target-language paragraphs are removed", async () => {
+    const texts = ["这是一段已经符合目标语言的完整测试文字。", "The remaining English paragraph needs translation."];
+    detectLanguage.mockResolvedValueOnce({ isReliable: true, languages: [{ language: "zh-CN", percentage: 70 }] })
+      .mockResolvedValueOnce({ isReliable: true, languages: [{ language: "zh-CN", percentage: 99 }] })
+      .mockResolvedValueOnce({ isReliable: true, languages: [{ language: "en", percentage: 99 }] });
+    const result = await translateWithSettings(settings(), { texts, sourceLang: "auto", targetLang: "zh-CN" });
+    expect(result.skippedIndexes).toEqual([0]);
+    expect(translateBatch).toHaveBeenCalledWith(expect.objectContaining({ sourceLang: "en", texts: [texts[1]] }), expect.any(AbortSignal));
+    expect(detectLanguage).toHaveBeenCalledTimes(3);
+  });
+
   it("preserves the selected source language and native arrays without mutating page requests", async () => {
     const config = settings();
     const request: TranslateBatchRequest = {

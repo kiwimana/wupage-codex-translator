@@ -41,11 +41,44 @@ export async function translateWithSettings(
   options: TranslationTaskOptions = {}
 ): Promise<TranslateBatchResponse> {
   options.signal?.throwIfAborted();
-  const skippedIndexes = settings.skipSameLanguage !== false ? await sameLanguageIndexes(request, options.signal) : [];
-  if (!skippedIndexes.length) return translateMatching(settings, request, options);
+  const config = settings.providers.find(provider => provider.id === (request.providerId ?? settings.activeProviderId));
+  if (config?.type === "doubao-web" && config.enabled !== false && (!request.sourceLang || request.sourceLang === "auto") && request.texts.length) {
+    // This provider requires a source language. Keep that mandatory detection
+    // inside its deadline and share evidence with the optional skip check.
+    return withDoubaoDeadline(async signal => {
+      const detections = new Map<string, Promise<chrome.i18n.LanguageDetectionResult>>();
+      const detect = (text: string) => {
+        let result = detections.get(text);
+        if (!result) { result = chrome.i18n.detectLanguage(text); detections.set(text, result); }
+        return result;
+      };
+      const sourceLang = await detectSourceLanguage(request.texts, signal, detect);
+      if (!sourceLang) throw new Error("无法可靠识别源语言，请在翻译设置中手动选择源语言。");
+      return translateFiltered(settings, request, { ...options, signal }, detect,
+        async pending => {
+          if (config.enabled === false) throw new Error(`Provider is disabled: ${config.id}`);
+          const remainingSource = pending.texts === request.texts ? sourceLang : await detectSourceLanguage(pending.texts, signal, detect);
+          if (!remainingSource) throw new Error("无法可靠识别源语言，请在翻译设置中手动选择源语言。");
+          return translateConfigured(settings, { ...pending, sourceLang: remainingSource, context: undefined }, config, { ...options, signal });
+        });
+    }, options.signal);
+  }
+  return translateFiltered(settings, request, options);
+}
+
+async function translateFiltered(
+  settings: ExtensionSettings,
+  request: TranslateBatchRequest,
+  options: TranslationTaskOptions,
+  detect?: (text: string) => Promise<chrome.i18n.LanguageDetectionResult>,
+  run: (request: TranslateBatchRequest) => Promise<TranslateBatchResponse> = pending => translateMatching(settings, pending, options)
+): Promise<TranslateBatchResponse> {
+  options.signal?.throwIfAborted();
+  const skippedIndexes = settings.skipSameLanguage !== false ? await sameLanguageIndexes(request, options.signal, detect) : [];
+  if (!skippedIndexes.length) return run(request);
   const skipped = new Set(skippedIndexes);
   const pending = request.texts.flatMap((text, index) => skipped.has(index) ? [] : [text]);
-  const result = pending.length ? await translateMatching(settings, { ...request, texts: pending }, options) : { translations: [], cached: 0 };
+  const result = pending.length ? await run({ ...request, texts: pending }) : { translations: [], cached: 0 };
   options.signal?.throwIfAborted();
   let cursor = 0;
   return { translations: request.texts.map((text, index) => skipped.has(index) ? text : result.translations[cursor++]), cached: result.cached, skippedIndexes };
