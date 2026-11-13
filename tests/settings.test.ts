@@ -30,6 +30,7 @@ describe("normalizeSettings", () => {
     expect(settings.chunkSize).toBe(4000);
     expect(settings.concurrency).toBe(1);
     expect(settings.translateCodeComments).toBe(true);
+    expect(settings.skipSameLanguage).toBe(true);
     expect(settings.imageTranslationEnabled).toBe(false);
     expect(settings.translationDisplayMode).toBe("bilingual");
     expect(settings.providers.length).toBeGreaterThan(0);

@@ -41,6 +41,7 @@ const pdfTranslationScope = query<HTMLSelectElement>("#pdfTranslationScope");
 const pdfTranslationPageRadius = query<HTMLInputElement>("#pdfTranslationPageRadius");
 const pdfTranslationPageRadiusField = query<HTMLElement>("#pdfTranslationPageRadiusField");
 const cacheEnabled = query<HTMLInputElement>("#cacheEnabled");
+const skipSameLanguage = query<HTMLInputElement>("#skipSameLanguage");
 const floatingBallEnabled = query<HTMLInputElement>("#floatingBallEnabled");
 const selectionTranslationEnabled = query<HTMLInputElement>("#selectionTranslationEnabled");
 const selectionTranslationFields = query<HTMLFieldSetElement>("#selectionTranslationFields");
@@ -206,6 +207,7 @@ function render(): void {
   pdfTranslationPageRadius.value = String(settings.pdfTranslationPageRadius ?? DEFAULT_SETTINGS.pdfTranslationPageRadius);
   updatePdfTranslationScope();
   cacheEnabled.checked = settings.cacheEnabled;
+  skipSameLanguage.checked = settings.skipSameLanguage !== false;
   cacheEnabled.disabled = CHATGPT_BUILD;
   if (CHATGPT_BUILD) cacheEnabled.title = "此版本不儲存永久譯文快取。";
   floatingBallEnabled.checked = settings.floatingBallEnabled;
@@ -975,6 +977,7 @@ function readSettingsFromForm(): ExtensionSettings {
     pdfTranslationPageRadius: pdfTranslationScope.value === "unlimited" ? null
       : pdfTranslationPageRadius.value === "" ? DEFAULT_SETTINGS.pdfTranslationPageRadius : Number(pdfTranslationPageRadius.value),
     cacheEnabled: cacheEnabled.checked,
+    skipSameLanguage: skipSameLanguage.checked,
     floatingBallEnabled: floatingBallEnabled.checked,
     selectionTranslation: {
       enabled: selectionTranslationEnabled.checked,

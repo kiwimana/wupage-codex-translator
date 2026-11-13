@@ -389,6 +389,7 @@ async function togglePageTranslation(): Promise<void> {
       translated?: number;
       cached?: number;
       failed?: number;
+      skipped?: number;
       error?: string;
       remaining?: number;
       pending?: number;
@@ -415,6 +416,7 @@ async function togglePageTranslation(): Promise<void> {
               ? `已翻译当前区域 ${result.translated ?? 0} 段，滚动页面将继续翻译。`
               : result.translated
                 ? `已翻译 ${result.translated} 段，缓存命中 ${result.cached ?? 0} 段。`
+                : result.skipped ? `已略過 ${result.skipped} 段：來源與目標語言相同，未呼叫翻譯服務。`
                 : "当前区域暂无可翻译内容，新内容加载后将自动翻译。"
       );
     }

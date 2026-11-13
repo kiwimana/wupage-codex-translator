@@ -56,6 +56,7 @@ export function normalizeSettings(value: unknown): ExtensionSettings {
     selectionTranslation: normalizeSelectionTranslation(input.selectionTranslation ?? DEFAULT_SETTINGS.selectionTranslation),
     targetLang: readString(input.targetLang, DEFAULT_SETTINGS.targetLang),
     sourceLang: readString(input.sourceLang, DEFAULT_SETTINGS.sourceLang),
+    skipSameLanguage: typeof input.skipSameLanguage === "boolean" ? input.skipSameLanguage : true,
     activeProviderId,
     chunkSize,
     concurrency,

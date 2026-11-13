@@ -26,7 +26,7 @@ export async function translateImageWithSettings(settings: ExtensionSettings, re
   }
   const provider = settings.providers.find((entry) => entry.id === settings.activeProviderId && entry.enabled !== false);
   if (!provider) throw new Error("没有可用的翻译服务。");
-  const digest = await sha256(JSON.stringify({ version: 5, modelRevision, provider, target: settings.targetLang,
+  const digest = await sha256(JSON.stringify({ version: 6, modelRevision, provider, target: settings.targetLang, skipSameLanguage: settings.skipSameLanguage !== false,
     source: settings.sourceLang,
     ...(provider.type === "doubao-web" ? { doubaoProtocolVersion: DOUBAO_PROTOCOL_VERSION, translateService: "1" } : {}), ...request }));
   const key = `${CACHE_PREFIX}image.${digest}`;

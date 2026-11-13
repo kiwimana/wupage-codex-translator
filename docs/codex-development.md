@@ -21,3 +21,5 @@ Chrome 模式是 `chrome-chatgpt`，輸出 `dist-chrome-chatgpt/`；保留 modul
 若 Firefox 要求 System access，僅在隔離測試程序設定 `MOZ_REMOTE_ALLOW_SYSTEM_ACCESS=1`。浮球測試驗證實際滑鼠移入只顯示一個設定齒輪、面板保持開啟、外側點擊關閉、底部換邊及 Tab／Enter／Escape；翻譯只連接本機模擬服務。
 
 安裝程式解析執行者電腦上的 Node.js 與 Codex／Gemini CLI／Claude Code、編譯啟動器並註冊目前使用者的原生主機。`bridge.config.json` 與主機 JSON 只存於本機；主機不開 HTTP 伺服器。`detect` 只檢查安裝檔；`connect` 必須從設定頁明確點擊才開啟登入，不自動驗證帳號。模型是經驗證的獨立參數；來源文字只經 stdin 傳送。其他開發說明見 [development.md](development.md)。
+
+同語言規則：`tests/same-language.test.ts` 驗證服務呼叫前略過、混合批次、取消／逾時、簡繁與設定開關；`scripts/test-same-language-firefox.mjs` 使用實際 Firefox 本機偵測器及 HTTP 模擬服務，驗證設定保存、頁面略過段數與原文。`scripts/generate-chinese-script-data.mjs` 以既有開發依賴 OpenCC 產生簡繁特徵字元集；執行時不載入 OpenCC，Apache 授權位於 public/chinese-script-data/。

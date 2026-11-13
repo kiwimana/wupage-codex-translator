@@ -522,6 +522,7 @@ export class PlayerSubtitleController {
     const signature = (value: ExtensionSettings) => {
       const providerId = CHATGPT_BUILD ? accountVideoProviderId(value) : value.activeProviderId;
       return JSON.stringify([value.sourceLang, value.targetLang, providerId,
+        value.skipSameLanguage !== false,
         value.providers.find(provider => provider.id === providerId), normalizeVideoTranslation(value.videoTranslation).preferredSource,
         normalizeVideoTranslation(value.videoTranslation).preferHumanSubtitles !== false, normalizeVideoTranslation(value.videoTranslation).optimizeSentences !== false, normalizeVideoTranslation(value.videoTranslation).dialogueOnly === true]);
     };

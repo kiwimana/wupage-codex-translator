@@ -200,6 +200,8 @@ export interface ExtensionSettings {
   autoTranslation?: AutoTranslationSettings;
   targetLang: string;
   sourceLang: string;
+  /** Skip matching languages before invoking any translation provider. Defaults to true. */
+  skipSameLanguage?: boolean;
   activeProviderId: string;
   chunkSize: number;
   concurrency: number;
@@ -243,6 +245,8 @@ export interface TranslateBatchRequest {
 export interface TranslateBatchResponse {
   translations: string[];
   cached: number;
+  /** Source indexes returned unchanged without a provider or cache lookup. */
+  skippedIndexes?: number[];
 }
 
 export interface ImageTextRegion {

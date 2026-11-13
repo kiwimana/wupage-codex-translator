@@ -17,6 +17,7 @@ import { LOCAL_MODELS } from "../local/models";
 import { DOUBAO_PROTOCOL_VERSION } from "../shared/doubao";
 import { withDoubaoDeadline } from "./doubao";
 import { detectSourceLanguage } from "./source-language";
+import { sameLanguageIndexes } from "./same-language";
 
 const providerLimiters = new Map<string, ProviderLimiter>();
 const debugTasks: TranslationDebugTask[] = [];
@@ -35,6 +36,22 @@ export interface TranslationTaskOptions {
 }
 
 export async function translateWithSettings(
+  settings: ExtensionSettings,
+  request: TranslateBatchRequest,
+  options: TranslationTaskOptions = {}
+): Promise<TranslateBatchResponse> {
+  options.signal?.throwIfAborted();
+  const skippedIndexes = settings.skipSameLanguage !== false ? await sameLanguageIndexes(request, options.signal) : [];
+  if (!skippedIndexes.length) return translateMatching(settings, request, options);
+  const skipped = new Set(skippedIndexes);
+  const pending = request.texts.flatMap((text, index) => skipped.has(index) ? [] : [text]);
+  const result = pending.length ? await translateMatching(settings, { ...request, texts: pending }, options) : { translations: [], cached: 0 };
+  options.signal?.throwIfAborted();
+  let cursor = 0;
+  return { translations: request.texts.map((text, index) => skipped.has(index) ? text : result.translations[cursor++]), cached: result.cached, skippedIndexes };
+}
+
+async function translateMatching(
   settings: ExtensionSettings,
   request: TranslateBatchRequest,
   options: TranslationTaskOptions = {}

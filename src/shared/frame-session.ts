@@ -4,6 +4,7 @@ export interface DocumentTranslationState {
   documentHidden?: boolean;
   active: boolean;
   translated: number;
+  skipped?: number;
   cached: number;
   failed: number;
   remaining: number;
@@ -106,6 +107,7 @@ export function frameExclusion(settings: ExtensionSettings, topUrl: string, fram
 /** Everything affecting translated source/results; presentation changes reuse results. */
 export function frameTranslationIdentity(settings: ExtensionSettings): string {
   return JSON.stringify([settings.sourceLang, settings.targetLang, settings.activeProviderId,
+    settings.skipSameLanguage !== false,
     settings.providers.find(provider => provider.id === settings.activeProviderId), settings.translateCodeComments,
     normalizeFrameTranslation(settings.frameTranslation)]);
 }
@@ -117,6 +119,7 @@ export function aggregateDocumentStates(frames: FrameDiagnostic[], active: boole
     const state = frame.state;
     if (!state) continue;
     for (const key of ["translated", "cached", "failed", "remaining", "pending"] as const) result[key] += state[key];
+    if (state.skipped) result.skipped = (result.skipped ?? 0) + state.skipped;
     result.error ??= state.error;
     result.errorCode ??= state.errorCode;
     if (state.retryAt !== undefined) result.retryAt = Math.max(result.retryAt ?? 0, state.retryAt);

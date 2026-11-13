@@ -49,6 +49,14 @@ try{
  check('Chrome loads the MV3 account extension with its fixed public identity and module service worker');
  const api=script=>evaluate(options.session,`(async()=>{${script}})()`);
  const current=await api(`return (await chrome.runtime.sendMessage({type:'GET_SETTINGS'})).data;`);assert.equal(current.cacheEnabled,false);assert.equal(current.autoTranslation.enabled,false);
+ assert.equal(current.skipSameLanguage,true);
+ const equalLanguage=await api(`const r=await chrome.runtime.sendMessage({type:'TRANSLATE_BATCH',texts:['Already English.'],sourceLang:'en-US',targetLang:'en'});if(!r.ok)throw new Error(r.error);return r.data;`);
+ assert.deepEqual(equalLanguage,{translations:['Already English.'],cached:0,skippedIndexes:[0]});
+ await evaluate(options.session,`document.getElementById('skipSameLanguage').checked=false;document.querySelector('#save').click();true`);
+ await waitFor(()=>api(`return (await chrome.runtime.sendMessage({type:'GET_SETTINGS'})).data.skipSameLanguage===false;`));
+ await evaluate(options.session,`document.getElementById('skipSameLanguage').checked=true;document.querySelector('#save').click();true`);
+ await waitFor(()=>api(`return (await chrome.runtime.sendMessage({type:'GET_SETTINGS'})).data.skipSameLanguage===true;`));
+ check('same-language translation is skipped before native work and the general settings switch persists');
  for(const [id,model] of [['chatgpt-desktop','gpt-6-luna'],['gemini-desktop','flash'],['claude-desktop','haiku']]){
   await evaluate(options.session,`document.querySelector('#providerTrigger').click();document.querySelector('[data-action="select"][data-provider-id="${id}"]').click();true`);
   await waitFor(()=>evaluate(options.session,`document.querySelector('#providerForm')?.dataset.providerId==='${id}'`));

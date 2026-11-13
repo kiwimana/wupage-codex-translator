@@ -57,12 +57,4 @@ export function normalizeVideoTranslation(value: unknown): VideoTranslationSetti
   };
 }
 
-export function sameVideoLanguage(a: string, b: string): boolean {
-  const family = (value: string) => {
-    const normalized = value.toLowerCase().replaceAll("_", "-");
-    if (/^zh(?:-(?:tw|hk|mo|hant))/.test(normalized)) return "zh-Hant";
-    if (/^zh(?:-|$)/.test(normalized)) return "zh-Hans";
-    return normalized.split("-")[0];
-  };
-  return a !== "auto" && b !== "auto" && family(a) === family(b);
-}
+export { sameTranslationLanguage as sameVideoLanguage } from "./language-identity";

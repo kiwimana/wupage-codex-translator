@@ -15,6 +15,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   frameTranslation: { enabled: true, excludeMatches: [] },
   targetLang: CHATGPT_BUILD ? "zh-TW" : "zh-CN",
   sourceLang: "auto",
+  skipSameLanguage: true,
   activeProviderId: CHATGPT_BUILD ? "chatgpt-desktop" : "microsoft-web-translate",
   chunkSize: 1200,
   concurrency: 3,

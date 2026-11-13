@@ -45,6 +45,7 @@ type SegmentStatus = "idle" | "queued" | "running" | "done" | "failed";
 interface SegmentEntry {
   segment: TextSegment;
   status: SegmentStatus;
+  skipped?: boolean;
 }
 
 interface TranslationSession {
@@ -58,6 +59,7 @@ interface TranslationSession {
   maxConcurrency: number;
   cancelled: boolean;
   translated: number;
+  skipped: number;
   cached: number;
   failed: number;
   firstError?: string;
@@ -90,6 +92,7 @@ type RescanScope = "none" | "changed" | ViewportRescanScope;
 
 export interface PageTranslationResult {
   translated: number;
+  skipped?: number;
   cached: number;
   failed: number;
   error?: string;
@@ -179,7 +182,8 @@ export function updatePageTranslationSettings(settings: ExtensionSettings): void
     } else pendingScan.settings = settings;
   }
   const session = activeSession;
-  if (session && (session.settings.sourceLang !== settings.sourceLang || session.settings.targetLang !== settings.targetLang)) {
+  if (session && (session.settings.sourceLang !== settings.sourceLang || session.settings.targetLang !== settings.targetLang
+    || (session.settings.skipSameLanguage !== false) !== (settings.skipSameLanguage !== false))) {
     // Start from the saved originals, cancelling the old generation before any
     // late response can render. A hidden or never-started page stays inactive.
     preserveViewportPosition(() => { void startPageTranslation(settings, false); },
@@ -209,7 +213,7 @@ export async function startLocalPageTranslation(settings: ExtensionSettings, reu
     suspendedSession = null;
     const stale = new Set(invalidateStaleSegments([...saved.changedRoots]));
     entries = new Map([...saved.entries].filter(([id, entry]) => !stale.has(id) && entry.segment.element.isConnected)
-      .map(([id, entry]) => [id, { segment: entry.segment, status: entry.status === "done" ? "done" : "idle" }]));
+      .map(([id, entry]) => [id, { segment: entry.segment, status: entry.status === "done" ? "done" : "idle", skipped: entry.skipped }]));
   } else clearPageTranslationState();
   const pending = { controller: new AbortController(), settings };
   pendingScan = pending;
@@ -230,7 +234,8 @@ export async function startLocalPageTranslation(settings: ExtensionSettings, reu
     if (pendingScan === pending) pendingScan = null;
   }
   currentDisplayMode = settings.translationDisplayMode;
-  const restored = [...entries.values()].filter((entry) => entry.status === "done").length;
+  const restored = [...entries.values()].filter((entry) => entry.status === "done" && !entry.skipped).length;
+  const skipped = [...entries.values()].filter((entry) => entry.status === "done" && entry.skipped).length;
 
   let resolveInitial!: (result: PageTranslationResult) => void;
   const initialPromise = new Promise<PageTranslationResult>((resolve) => {
@@ -249,6 +254,7 @@ export async function startLocalPageTranslation(settings: ExtensionSettings, reu
     maxConcurrency: Math.min(MAX_PAGE_CONCURRENCY, performance.concurrency),
     cancelled: false,
     translated: restored,
+    skipped,
     cached: restored,
     failed: 0,
     initialPending: new Set(),
@@ -333,6 +339,7 @@ export function hideLocalPageTranslation(explicitStop = true): void {
 function getTranslationIdentity(settings: ExtensionSettings): string {
   return JSON.stringify({
     sourceLang: settings.sourceLang,
+    skipSameLanguage: settings.skipSameLanguage !== false,
     targetLang: settings.targetLang,
     activeProviderId: settings.activeProviderId,
     provider: settings.providers.find((provider) => provider.id === settings.activeProviderId),
@@ -465,10 +472,14 @@ async function runBatch(session: TranslationSession, segments: TextSegment[]): P
       );
     }, segments);
     session.cached += data.cached;
-    session.translated += currentSegments.length;
+    const skippedIndexes = new Set(data.skippedIndexes ?? []);
+    const skippedIds = new Set(segments.filter((_segment, index) => skippedIndexes.has(index)).map(segment => segment.id));
+    const skippedCount = currentSegments.filter(segment => skippedIds.has(segment.id)).length;
+    session.translated += currentSegments.length - skippedCount;
+    session.skipped += skippedCount;
     currentSegments.forEach((segment) => {
       const entry = session.entries.get(segment.id);
-      if (entry) entry.status = "done";
+      if (entry) { entry.status = "done"; entry.skipped = skippedIds.has(segment.id); }
     });
   } catch (error) {
     if (!isActive(session)) return;
@@ -762,6 +773,7 @@ function isActive(session: TranslationSession): boolean {
 function getResult(session: TranslationSession): PageTranslationResult {
   return {
     translated: session.translated,
+    ...(session.skipped ? { skipped: session.skipped } : {}),
     cached: session.cached,
     failed: session.failed,
     error: session.firstError,

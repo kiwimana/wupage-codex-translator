@@ -71,6 +71,24 @@ describe("viewport page translation", () => {
     });
   }
 
+  it("keeps same-language text untouched and counts skipped items separately across restore", async () => {
+    document.body.innerHTML = '<main><p>Already in the target language.</p></main>';
+    vi.mocked(sendRuntimeRequest).mockImplementation(async (request: RuntimeRequest) => {
+      if (request.type !== "TRANSLATE_BATCH") throw new Error("Unexpected request");
+      return { translations: request.texts, cached: 0, skippedIndexes: request.texts.map((_text, index) => index) };
+    });
+    const result = await startPageTranslation({ ...settings, skipSameLanguage: true });
+    expect(result).toMatchObject({ translated: 0, skipped: 1, cached: 0, failed: 0 });
+    expect(document.querySelector(".wupage-translation")).toBeNull();
+    expect(document.querySelector(".wupage-translation-pending")).toBeNull();
+    hidePageTranslation();
+    const restored = await startPageTranslation({ ...settings, skipSameLanguage: true });
+    expect(restored).toMatchObject({ translated: 0, skipped: 1, cached: 0, failed: 0 });
+    expect(vi.mocked(sendRuntimeRequest)).toHaveBeenCalledOnce();
+    updatePageTranslationSettings({ ...settings, skipSameLanguage: false });
+    await vi.waitFor(() => expect(vi.mocked(sendRuntimeRequest)).toHaveBeenCalledTimes(2));
+  });
+
   // The initial document scan yields to the browser, so a request is only in
   // flight on a later task; tests that hold a response open wait here first.
   async function waitForBatchRequests(count = 1): Promise<void> {

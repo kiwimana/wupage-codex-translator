@@ -60,6 +60,13 @@ describe("options provider controls", () => {
     expect(document.querySelector("#providerForm [data-field='inheritPerformance']")).toBeNull();
     expect(document.querySelector("footer #test")).toBeNull();
     expect(query<HTMLSelectElement>("#sourceLang").value).toBe("auto");
+    expect(query<HTMLInputElement>("#skipSameLanguage").checked).toBe(true);
+    query<HTMLInputElement>("#skipSameLanguage").checked = false;
+    click("#save");
+    await vi.waitFor(() => expect(stored.skipSameLanguage).toBe(false));
+    query<HTMLInputElement>("#skipSameLanguage").checked = true;
+    click("#save");
+    await vi.waitFor(() => expect(stored.skipSameLanguage).toBe(true));
     expect(query<HTMLSelectElement>("#sourceLang").selectedOptions[0]?.textContent)
       .toBe("自动检测");
     expect(query<HTMLSelectElement>("#translationDisplayMode").selectedOptions[0]?.textContent)

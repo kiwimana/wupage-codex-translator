@@ -76,6 +76,14 @@
               </label>
             </div>
             <div class="general-toggles">
+              <div class="same-language-setting">
+              <label class="setting-toggle">
+                <span>來源與目標語言相同時略過翻譯</span>
+                <input id="skipSameLanguage" type="checkbox" role="switch" aria-describedby="skipSameLanguageHelp" />
+                <span class="setting-toggle-control" aria-hidden="true"></span>
+              </label>
+              <p id="skipSameLanguageHelp" class="hint">預設開啟。自動偵測時逐段在本機判斷；確認已是目標語言就保留原文，不呼叫翻譯服務。簡中與繁中分開判斷；無法確定時仍正常翻譯。</p>
+              </div>
               <div class="image-feature" data-loading aria-busy="true">
                 <div class="image-feature-row">
                   <label id="imageTranslationLabel" for="imageTranslationEnabled" class="image-feature-label" title="点击图片旁按钮，覆盖原文">图片翻译</label>

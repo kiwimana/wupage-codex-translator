@@ -1,6 +1,6 @@
 import { sendRuntimeRequest } from "./runtime";
 import type { ExtensionSettings, TranslateBatchResponse } from "../shared/types";
-import { sameVideoLanguage } from "../shared/video";
+import { sameTranslationLanguage } from "../shared/language-identity";
 import { createDocumentKey } from "../shared/frame-session";
 
 let nextRequest = 0;
@@ -10,7 +10,7 @@ export class VideoRequests {
 
   async translate(texts: string[], signal?: AbortSignal): Promise<string[]> {
     signal?.throwIfAborted();
-    if (sameVideoLanguage(this.language, this.settings.targetLang)) return texts;
+    if (this.settings.skipSameLanguage !== false && sameTranslationLanguage(this.language, this.settings.targetLang)) return texts;
     const requestId = `r-${++nextRequest}`;
     const cancel = () => { void sendRuntimeRequest({ type: "CANCEL_VIDEO_SUBTITLES", sessionId: this.id, requestId }).catch(() => undefined); };
     signal?.addEventListener("abort", cancel, { once: true });

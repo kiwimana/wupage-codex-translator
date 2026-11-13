@@ -1060,6 +1060,9 @@ export function refreshTranslationState(): void {
               : state.active
                 ? "当前区域暂无可翻译内容，滚动页面将继续翻译。"
                 : "点击悬浮球即可翻译全文。");
+    if (state.skipped) message = state.translated === 0 && state.failed === 0 && !busy && !menuError
+      ? `已略過 ${state.skipped} 段：來源與目標語言相同，未呼叫翻譯服務。`
+      : `${message} 已略過 ${state.skipped} 段相同語言內容。`;
     if (retrySeconds > 0) message += ` 请等待约 ${retrySeconds} 秒后再试。`;
     if (status.textContent !== message) status.textContent = message;
   }
